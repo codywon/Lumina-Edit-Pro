@@ -1,0 +1,17 @@
+node_modules/
+.npm-cache/
+build/
+dist/
+coverage/
+src-tauri/target/
+src-tauri/gen/
+.worktrees/
+.claude/
+.codex/
+.playwright-workspace/
+CLAUDE.md
+.DS_Store
+*.log
+*.exe
+.env*
+!.env.example

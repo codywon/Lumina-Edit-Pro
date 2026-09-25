@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lumina Edit Pro</title>
+    <script>
+      // Prevent flash of unstyled content
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.add('light');
+      }
+
+      window.__luminaSplashStartedAt = performance.now();
+      window.__luminaMinStartupSplashMs = 0; // 0ms delay: Instant startup!
+
+      window.__luminaHideStartupSplash = (reason = 'ready') => {
+        const splash = document.getElementById('lumina-startup-splash');
+        if (!splash || splash.dataset.state === 'hidden' || splash.dataset.state === 'hiding') return;
+
+        splash.dataset.state = 'hidden';
+        splash.dataset.hideReason = reason;
+        splash.classList.add('lumina-splash-hide');
+        splash.setAttribute('aria-hidden', 'true');
+        window.setTimeout(() => {
+          if (splash.isConnected) splash.remove();
+        }, 120);
+      };
+
+      window.__luminaSetStartupSplashStatus = (message) => {
+        const subtitle = document.querySelector('.lumina-splash-subtitle');
+        if (subtitle) subtitle.textContent = message;
+      };
+
+      // Watchdog failsafe
+      window.setTimeout(() => {
+        window.__luminaHideStartupSplash?.('watchdog');
+      }, 2000);
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      html.dark {
+        color-scheme: dark;
+      }
+
+      body {
+        margin: 0;
+        background: #ffffff;
+      }
+
+      html.dark body {
+        background: #0E0E11;
+      }
+
+      #lumina-startup-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: grid;
+        place-items: center;
+        background: #ffffff;
+        opacity: 1;
+        transition: opacity 120ms ease, visibility 120ms ease;
+      }
+
+      html.dark #lumina-startup-splash {
+        background: #0E0E11;
+      }
+
+      #lumina-startup-splash.lumina-splash-hide {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .lumina-splash-shell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        user-select: none;
+      }
+
+      /* Industry Standard Minimal Fast Spinner */
+      .lumina-splash-spinner {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 2.5px solid rgba(236, 91, 19, 0.15);
+        border-top-color: #ec5b13;
+        animation: lumina-spin 0.65s linear infinite;
+      }
+
+      html.dark .lumina-splash-spinner {
+        border-color: rgba(236, 91, 19, 0.2);
+        border-top-color: #ff7a18;
+      }
+
+      .lumina-splash-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      html.dark .lumina-splash-brand {
+        color: #cbd5e1;
+      }
+
+      @keyframes lumina-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="lumina-startup-splash" role="status" aria-label="正在载入">
+      <div class="lumina-splash-shell">
+        <div class="lumina-splash-spinner"></div>
+        <div class="lumina-splash-brand">Lumina Edit Pro</div>
+      </div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

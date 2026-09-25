@@ -1,0 +1,51 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Lumina Edit Pro",
+  "version": "0.1.0",
+  "identifier": "com.lumina.editpro",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:3188",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Lumina Edit Pro",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": false,
+        "shadow": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "txt"],
+        "name": "Markdown Document",
+        "description": "Markdown text document",
+        "role": "Editor"
+      }
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

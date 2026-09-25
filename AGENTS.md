@@ -1,84 +1,140 @@
-# AGENTS.md
+# Lumina Edit Pro 表格排版与自适应设计规范 (Table Design Specification)
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+> **核心原则**：兼顾 DeepSeek/ChatGPT 的智能自适应内容宽度与 Microsoft Word 的自由鼠标拖拽调节，彻底解决传统 Markdown 表格死板均分或单字断行孤儿字的行业顽疾。
 
-## Important
-- Goal: To become the most user-friendly markdown editor for AI worldwide
+---
 
-## Desktop Build & "无法访问该页面" Prevention Rule (CRITICAL)
+## 1. 核心技术痛点回顾
 
-### Root Cause Analysis
-1. **Debug vs Release Binary Discrepancy**:
-   - `src-tauri/target/debug/lumina-edit-pro.exe` is built in Tauri Debug mode. By design, Tauri debug binaries do NOT embed the frontend assets into the binary; instead, they connect to the Vite dev server at `devUrl` (`http://localhost:3188`).
-   - If `npm run dev` is not running, launching a debug binary will always fail with the WebView2 error: **"无法访问该页面" (ERR_CONNECTION_REFUSED)**.
-2. **Windows File Locking (`os error 5: 拒绝访问`)**:
-   - If `lumina-edit-pro.exe` is running in the background, Windows locks the file. Recompiling with `tauri build` will fail to overwrite the binary, leaving an outdated or broken file.
-3. **User Folder Confusion**:
-   - Users who open `src-tauri/target/debug/` directly will double-click the debug binary and see "无法访问该页面".
+在 Markdown 富文本编辑器中，表格排版普遍存在三大天然矛盾：
 
-### Mandatory Engineering Rules (NEVER BREAK)
-1. **Kill Background Processes Before Build**:
-   - Always run `powershell -Command "Stop-Process -Name lumina-edit-pro -Force -ErrorAction SilentlyContinue"` before compiling.
-2. **Synchronize Root Executable**:
-   - Every desktop build MUST copy the self-contained release executable to the project root:
-     `D:\myscript\Lumina-Edit-Pro\Lumina-Edit-Pro.exe`
-   - The build script MUST ALSO overwrite `src-tauri/target/debug/lumina-edit-pro.exe` with the self-contained release binary, so that double-clicking ANY `.exe` in ANY directory always opens the embedded editor and NEVER produces "无法访问该页面".
-3. **Always Build with Embedded Assets**:
-   - Use `npm run tauri:build` (or `npx tauri build --no-bundle`) which guarantees `npm run build` runs first to refresh `dist/`, and embeds all HTML, CSS, JS, KaTeX fonts directly into the single executable.
+1. **死板均分 vs 内容不均**：若强制使用 `table-layout: fixed`，2 列表格会死板 50%:50%，3 列表格死板 33%:33%。简短的“状态”列占据大片空白，长达数百字的“说明”列被严重挤压；
+2. **浏览器原生 auto-layout 的 CJK 碎裂陷阱**：在 `table-layout: auto` 下，浏览器遇到长内容列时会试图将其他列压缩到“最小宽度”。而在默认 `word-break: normal` 下，中文汉字被视为在任意字符间均可断行，导致 `full (默认)` 被折成 `full (默` 和 `认)`，`3.6x 更小` 的 `小` 掉到下一行，排版极其丑陋；
+3. **行内代码块（Code Chips）膨胀**：单元格内的 `` `code` `` 标签若使用正文的较大内边距和圆角，在密集混排时会导致行高突兀、行距失调。
 
-## Development commands
+---
 
-- `npm install` — install dependencies.
-- `npm run dev` — start the Vite dev server on port 3188, bound to `0.0.0.0`.
-- `npm run build` — create a production build with Vite.
-- `npm run preview` — preview the production build.
-- `npm run lint` — run static type check: `tsc --noEmit`.
-- `npm run test` — run unit test suite with Vitest: `vitest run --environment jsdom`.
-- `npm run tauri:dev` — run Tauri desktop in development mode with HMR on port 3188.
-- `npm run tauri:build` — compile production desktop binary and sync to root `Lumina-Edit-Pro.exe`.
-- `npm run clean` — remove `dist`.
+## 2. 黄金排版四法则 (The 4 Pillars)
 
-## High-level architecture
+### 法则一：动静双轨制布局（Dynamic Layout Switching）
 
-- This is a client-side React 19 + TypeScript + Vite single-page app for Markdown editing with AI assistance.
-- Boot flow: `index.html` pre-applies the light/dark class on `<html>` to avoid theme flash, `src/main.tsx` mounts React, and `src/App.tsx` composes the app providers and shell.
-- `src/App.tsx` is the main orchestration layer. It creates the TipTap editor, owns the top-level UI/document state, and composes the main regions: `Header`, `SidebarLeft`, `Editor`, `SidebarRight`, `Footer`, and the modal components.
+- **默认状态**：`table-layout: auto`。让浏览器根据实际内容权重进行智能自适应分配，短列紧凑，长说明列舒适占据 70%\~80% 宽度。
+- **用户拖拽后状态**：一旦用户通过鼠标拖动列宽（ProseMirror 注入具体的 `width: XXXpx`），CSS 智能识别并切换为 `table-layout: fixed !important`。
 
-## Editor and document flow
+```css
+/* 默认自适应 */
+.prose-custom table,
+.tiptap table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  table-layout: auto;
+  box-sizing: border-box;
+}
 
-- The canonical document state is a Markdown string stored in `App.tsx`.
-- TipTap is configured in `src/App.tsx` with StarterKit, `tiptap-markdown`, tables, highlight support, and a custom lowlight-backed code block node view.
-- On editor updates, the ProseMirror document is serialized back to Markdown and stored in React state; heading nodes are also extracted there to drive the outline sidebar.
-- When a file is opened, the flow goes the other direction: Markdown content is loaded into app state and then pushed back into the editor instance.
-- `src/components/Editor.tsx` is primarily the UI/controller for the existing editor instance: toolbar actions, source mode textarea, search highlighting, scroll-to-heading behavior, fullscreen/toolbar controls, and editor presentation.
-- Important detail: the editor instance is created in `src/App.tsx`, not in `src/components/Editor.tsx`.
-- `viewMode` includes `'split'`, but `src/components/Editor.tsx` only has a dedicated `'source'` branch and a single rich-editor branch, so split mode is not a separate rendering path right now.
+/* 仅在用户手动拖拽产生绝对 width 时，才锁定为固定布局，绝不误判 min-width */
+.prose-custom table[style^="width:"],
+.prose-custom table[style*="; width:"],
+.prose-custom table[style*=";width:"],
+.tiptap table[style^="width:"],
+.tiptap table[style*="; width:"],
+.tiptap table[style*=";width:"],
+.prose-custom table:has(col[style^="width:"]),
+.prose-custom table:has(col[style*="; width:"]),
+.prose-custom table:has(col[style*=";width:"]),
+.tiptap table:has(col[style^="width:"]),
+.tiptap table:has(col[style*="; width:"]),
+.tiptap table:has(col[style*=";width:"]) {
+  table-layout: fixed !important;
+}
+```
 
-## Cross-cutting state and persistence
+### 法则二：汉字语义防碎裂约束（CJK Semantic Integrity）
 
-- `src/contexts/ThemeContext.tsx` manages `light` / `dark` / `system` theme selection by toggling classes on `<html>` and persisting the choice in `localStorage`.
-- `src/contexts/SettingsContext.tsx` persists editor/UI settings to `localStorage` and applies global CSS variables/classes such as editor font size, line height, and compact density mode.
-- `src/App.tsx` also persists document content and recent files in `localStorage`.
+- 使用 `word-break: keep-all;` 约束 `th` 与 `td`。
+- 具有连续语义的中文词组（如 `(默认)`、`已实现`、`更小`、`需后台改造`）被浏览器作为整体看待，**严禁将单个汉字拆成孤行**。
+- 搭配 `overflow-wrap: break-word;`（或 `anywhere`），确保即使出现无空格的超长变量名或代码路径也能安全截断换行，绝不撑破容器。
 
-## AI integration
+```css
+.prose-custom td,
+.tiptap td {
+  word-break: keep-all; /* 保护中文语义单元完整，杜绝单字孤行 */
+  overflow-wrap: break-word; /* 防止超长无空格英文字符串溢出 */
+  vertical-align: top;
+  line-height: 1.6;
+}
+```
 
-- `src/components/SidebarRight.tsx` calls Gemini directly from the browser using `@google/genai`.
-- The current Markdown document is embedded into the prompt, and AI responses can be appended to the document content.
-- Environment wiring is split between `README.md` and `vite.config.ts`: the README tells local users to set `GEMINI_API_KEY` in `.env.local`, and `vite.config.ts` injects `process.env.GEMINI_API_KEY` at build/dev time.
+### 法则三：设立列宽呼吸底线（Min-Width Safeguards）
 
-## File and workspace handling
+- 避免短信息列被长文本列挤压至不足以显示简短词组：
+  - **首列底线**：`th:first-child, td:first-child { min-width: 95px; }`（通常为参数、档位、属性、字段名）；
+  - **通用列底线**：`th, td { min-width: 80px; }`；
+  - **舒展内边距**：`padding: var(--table-row-padding, 0.6rem) 0.95rem !important;`。
 
-- `src/lib/fileSystem.ts` wraps browser File System Access APIs for opening files, opening directories, reading, and writing.
-- When those APIs are unavailable, it falls back to `<input type="file">` for open flows and blob download behavior for saves.
-- The current file handling is Markdown-focused (`.md` files).
+### 法则四：单元格内代码块（Code Chips）微米级精致化
 
-## Styling and configuration
+- 单元格内的代码块必须轻量紧凑，不能使用正文大药丸的粗大样式：
 
-- Tailwind CSS v4 is configured in `src/index.css` rather than a separate Tailwind config file. The file uses `@import "tailwindcss"`, `@plugin "@tailwindcss/typography"`, and an `@theme` block for design tokens.
-- `src/index.css` also contains the editor-specific presentation rules: prose styling, code block/syntax highlighting, density mode, line numbers, and focus mode styling.
-- `vite.config.ts` uses the React and Tailwind Vite plugins, defines `process.env.GEMINI_API_KEY`, and maps the `@` alias to the repository root (not `src/`).
-- `vite.config.ts` also contains an AI Studio-specific HMR guard controlled by `DISABLE_HMR`; keep that behavior in mind before changing dev-server settings.
+```css
+.prose-custom td code,
+.prose-custom th code,
+.tiptap td code,
+.tiptap th code {
+  font-size: 0.84em !important;
+  padding: 0.12em 0.38em !important;
+  border-radius: 4px !important;
+  background-color: rgba(175, 184, 193, 0.18) !important;
+  border: 1px solid rgba(175, 184, 193, 0.22) !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  display: inline !important;
+  line-height: 1.35 !important;
+}
 
-## Product/UI note
+.dark .prose-custom td code,
+.dark .tiptap td code {
+  background-color: rgba(110, 118, 129, 0.25) !important;
+  border-color: rgba(110, 118, 129, 0.28) !important;
+}
+```
 
-- Much of the user-facing UI copy is in Chinese. Preserve that unless the task is explicitly changing product language.
+---
+
+## 3. 视觉与交互规范
+
+1. **表头双实线**：表头底部采用 `border-bottom: 2px solid #d0d7de;`（暗色为 `#30363d`），彰显正式出版物与专业文档的高级质感。
+
+2. **行悬停微光**：
+
+   ```css
+   .prose-custom tr:hover td,
+   .tiptap tr:hover td {
+     background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.035);
+   }
+   .dark .prose-custom tr:hover td,
+   .dark .tiptap tr:hover td {
+     background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.07);
+   }
+   ```
+
+3. **Typora / Excel 快捷键操作集**：
+
+   - Tab：跳到下一个单元格；行末单元格按 Tab 自动新增一行；
+   - Shift + Tab：回退到上一个单元格；
+   - Ctrl + Enter：表格内任意位置立即向下插入新行；
+   - Ctrl + T：快速插入标准表格。
+
+4. **菜单辅助能力**：
+
+   - 支持【自适应内容列宽 (推荐)】一键清除手动像素值恢复黄金自适应；
+   - 支持【当前列对齐：居左 / 居中 / 靠右】；
+   - 支持【均等分配各列列宽】。
+
+---
+
+*本文档为 Lumina Edit Pro 永久排版设计规范，后续所有表格组件、节点扩展与样式更新均需严格遵守此标准。*

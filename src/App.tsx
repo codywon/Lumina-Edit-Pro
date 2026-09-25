@@ -11,6 +11,8 @@ import TableCell from '@tiptap/extension-table-cell';
 import Highlight from '@tiptap/extension-highlight';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
+import Paragraph from '@tiptap/extension-paragraph';
+import Heading from '@tiptap/extension-heading';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { common, createLowlight } from 'lowlight';
@@ -762,6 +764,51 @@ function AppContent() {
     StarterKit.configure({
       codeBlock: false,
       link: false,
+      paragraph: false,
+      heading: false,
+    }),
+    Paragraph.extend({
+      addAttributes() {
+        return {
+          textAlign: {
+            default: null,
+            parseHTML: (element: HTMLElement) =>
+              element.getAttribute('align') ||
+              element.style.textAlign ||
+              element.closest('[align]')?.getAttribute('align') ||
+              null,
+            renderHTML: (attributes: Record<string, any>) => {
+              if (!attributes.textAlign) return {};
+              return {
+                style: `text-align: ${attributes.textAlign};`,
+                align: attributes.textAlign,
+              };
+            },
+          },
+        };
+      },
+    }),
+    Heading.extend({
+      addAttributes() {
+        return {
+          ...this.parent?.(),
+          textAlign: {
+            default: null,
+            parseHTML: (element: HTMLElement) =>
+              element.getAttribute('align') ||
+              element.style.textAlign ||
+              element.closest('[align]')?.getAttribute('align') ||
+              null,
+            renderHTML: (attributes: Record<string, any>) => {
+              if (!attributes.textAlign) return {};
+              return {
+                style: `text-align: ${attributes.textAlign};`,
+                align: attributes.textAlign,
+              };
+            },
+          },
+        };
+      },
     }),
     CodeBlockLowlight.configure({
       lowlight,
@@ -777,22 +824,37 @@ function AppContent() {
       autolink: true,
       defaultProtocol: 'https',
     }),
-    Image.extend({
+    Image.configure({
+      inline: true,
+    }).extend({
       addAttributes() {
         return {
           ...this.parent?.(),
           width: {
             default: null,
-            renderHTML: (attributes) => {
+            parseHTML: (element: HTMLElement) =>
+              element.getAttribute('width') || element.style.width || null,
+            renderHTML: (attributes: Record<string, any>) => {
               if (!attributes.width) return {};
-              return { style: `width: ${attributes.width}` };
+              const w = isNaN(Number(attributes.width))
+                ? attributes.width
+                : `${attributes.width}px`;
+              return { width: attributes.width, style: `width: ${w}` };
             },
           },
           alignment: {
-            default: 'center',
-            renderHTML: (attributes) => ({
-              'data-align': attributes.alignment || 'center',
-            }),
+            default: null,
+            parseHTML: (element: HTMLElement) =>
+              element.getAttribute('data-align') ||
+              element.getAttribute('align') ||
+              element.closest('[align]')?.getAttribute('align') ||
+              null,
+            renderHTML: (attributes: Record<string, any>) => {
+              if (!attributes.alignment) return {};
+              return {
+                'data-align': attributes.alignment,
+              };
+            },
           },
         };
       },

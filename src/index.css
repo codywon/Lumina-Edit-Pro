@@ -552,6 +552,51 @@ body,
     transition: all 0.15s ease;
   }
 
+  /* Remove bottom border under linked badge images */
+  .prose-custom a:has(img),
+  .tiptap a:has(img) {
+    border-bottom: none !important;
+  }
+
+  /* GitHub-style Inline Images, Shields.io Badges & Alignment */
+  .prose-custom img,
+  .tiptap img {
+    display: inline-block !important;
+    vertical-align: middle !important;
+    margin: 0 !important;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .prose-custom p[align="center"],
+  .prose-custom div[align="center"],
+  .prose-custom h1[align="center"],
+  .prose-custom h2[align="center"],
+  .prose-custom h3[align="center"],
+  .prose-custom p:has([data-align="center"]),
+  .tiptap p[align="center"],
+  .tiptap div[align="center"],
+  .tiptap h1[align="center"],
+  .tiptap h2[align="center"],
+  .tiptap h3[align="center"],
+  .tiptap p:has([data-align="center"]) {
+    text-align: center !important;
+  }
+
+  .prose-custom p[align="right"],
+  .prose-custom p:has([data-align="right"]),
+  .tiptap p[align="right"],
+  .tiptap p:has([data-align="right"]) {
+    text-align: right !important;
+  }
+
+  .prose-custom p[align="left"],
+  .prose-custom p:has([data-align="left"]),
+  .tiptap p[align="left"],
+  .tiptap p:has([data-align="left"]) {
+    text-align: left !important;
+  }
+
   .prose-custom a:hover {
     border-bottom-color: var(--accent);
     background: rgba(var(--accent-rgb), 0.08);

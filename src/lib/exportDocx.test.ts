@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { generateDocxBytes } from './exportDocx';
+import { extractDocumentBaseName } from './exportSave';
 
 describe('generateDocxBytes (.docx OpenXML exporter)', () => {
+  it('extracts the first heading as default export file base name', () => {
+    const md = `# 酒店雷达系统对接接口文档\n\n正文内容`;
+    expect(extractDocumentBaseName(md)).toBe('酒店雷达系统对接接口文档');
+  });
   it('generates a valid PKZIP archive containing OpenXML document and styles', () => {
     const md = `# 项目方案书
 

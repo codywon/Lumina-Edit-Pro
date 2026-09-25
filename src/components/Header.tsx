@@ -7,6 +7,7 @@ import BrandIcon from './BrandIcon';
 import { formatPanguSpacing } from '../lib/pangu';
 import { exportElementToLongImage } from '../lib/exportImage';
 import { exportMarkdownToDocx } from '../lib/exportDocx';
+import { extractDocumentBaseName, saveExportedBytes } from '../lib/exportSave';
 
 interface HeaderProps {
   viewMode: 'wysiwyg' | 'source' | 'split';
@@ -103,11 +104,11 @@ function HeaderComponent({
       showToast('未找到可导出的正文内容', 'warning');
       return;
     }
-    void exportElementToLongImage(editorDom, 'Lumina-Document.png', showToast);
+    const baseName = extractDocumentBaseName(content, 'Lumina-Document');
+    void exportElementToLongImage(editorDom, `${baseName}.png`, showToast);
   };
-  const handleExport = (format: 'html' | 'pdf' | 'md') => {
-    let blob: Blob;
-    let fileName = 'Lumina-Document';
+  const handleExport = async (format: 'html' | 'pdf' | 'md') => {
+    const baseName = extractDocumentBaseName(content, 'Lumina-Document');
     
     if (format === 'html') {
       const htmlBody = marked.parse(content);
@@ -116,7 +117,7 @@ function HeaderComponent({
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${fileName}</title>
+    <title>${baseName}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script>
@@ -250,25 +251,28 @@ function HeaderComponent({
     </article>
   </body>
 </html>`;
-      blob = new Blob([html], { type: 'text/html' });
-      fileName += '.html';
+      await saveExportedBytes({
+        bytes: new TextEncoder().encode(html),
+        defaultFileName: `${baseName}.html`,
+        filterName: 'HTML 网页文档 (*.html)',
+        extensions: ['html'],
+        mimeType: 'text/html;charset=utf-8',
+        showToast,
+        successLabel: ' HTML 网页',
+      });
     } else if (format === 'pdf') {
-      // PDF export is complex in browser, just trigger print for now
       window.print();
-      return;
     } else {
-      blob = new Blob([content], { type: 'text/markdown' });
-      fileName += '.md';
+      await saveExportedBytes({
+        bytes: new TextEncoder().encode(content),
+        defaultFileName: `${baseName}.md`,
+        filterName: 'Markdown 文档 (*.md)',
+        extensions: ['md'],
+        mimeType: 'text/markdown;charset=utf-8',
+        showToast,
+        successLabel: ' Markdown 文档',
+      });
     }
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -327,7 +331,7 @@ function HeaderComponent({
         { label: '打开文件', shortcut: settings.shortcuts.openFile, action: onOpenFile },
         { label: '保存', shortcut: settings.shortcuts.saveFile, action: onSave },
         { label: '打印', shortcut: '', action: () => window.print() },
-        { label: '导出为Word (.docx)', action: () => exportMarkdownToDocx(content, 'Lumina-Document.docx', showToast) },
+        { label: '导出为Word (.docx)', action: () => void exportMarkdownToDocx(content, undefined, showToast) },
         { label: '导出为Markdown', action: () => handleExport('md') },
         { label: '导出为HTML', action: () => handleExport('html') },
         { label: '导出为PDF', action: () => handleExport('pdf') },

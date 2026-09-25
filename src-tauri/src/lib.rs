@@ -325,6 +325,43 @@ fn file_write_asset(payload: FileWriteAssetPayload) -> Result<serde_json::Value,
     Ok(serde_json::json!({ "relativePath": payload.relative_path }))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileExportSavePayload {
+    pub default_name: String,
+    pub filter_name: String,
+    pub extensions: Vec<String>,
+    pub bytes: Vec<u8>,
+}
+
+#[tauri::command]
+async fn file_export_save(app: tauri::AppHandle, payload: FileExportSavePayload) -> Result<Option<String>, String> {
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel();
+
+    let ext_refs: Vec<&str> = payload.extensions.iter().map(|s| s.as_str()).collect();
+    app.dialog()
+        .file()
+        .set_file_name(&payload.default_name)
+        .add_filter(&payload.filter_name, &ext_refs)
+        .save_file(move |file_path| {
+            let _ = tx.send(file_path);
+        });
+
+    let selected = rx.recv().map_err(|e| e.to_string())?;
+    if let Some(path) = selected {
+        let path_str = path.to_string();
+        let p = Path::new(&path_str);
+        if let Some(parent) = p.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(p, &payload.bytes).map_err(|e| e.to_string())?;
+        Ok(Some(path_str))
+    } else {
+        Ok(None)
+    }
+}
+
 #[tauri::command]
 async fn file_pick_open(app: tauri::AppHandle) -> Result<Option<NativeFile>, String> {
     use std::sync::mpsc;
@@ -607,6 +644,7 @@ pub fn run() {
             file_read,
             file_write,
             file_write_asset,
+            file_export_save,
             file_pick_open,
             workspace_pick_open,
             workspace_restore_recent,

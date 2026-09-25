@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import { extractDocumentBaseName, saveExportedBytes } from './exportSave';
 
 /**
  * Pure TypeScript PKZIP Builder (Store method, 0 external dependencies)
@@ -559,25 +560,27 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
   ]);
 }
 
-export function exportMarkdownToDocx(
+export async function exportMarkdownToDocx(
   markdown: string,
-  fileName = 'Lumina-Document.docx',
+  fileName?: string,
   showToast?: (msg: string, level?: 'info' | 'warning' | 'error') => void
-): void {
+): Promise<void> {
   try {
-    const bytes = generateDocxBytes(markdown, fileName);
-    const blob = new Blob([bytes], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    const baseName = fileName
+      ? fileName.replace(/\.docx$/i, '')
+      : extractDocumentBaseName(markdown, 'Lumina-Document');
+    const targetFileName = `${baseName}.docx`;
+    const bytes = generateDocxBytes(markdown, baseName);
+
+    await saveExportedBytes({
+      bytes,
+      defaultFileName: targetFileName,
+      filterName: 'Microsoft Word 文档 (*.docx)',
+      extensions: ['docx'],
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      showToast,
+      successLabel: ' Word (.docx) 文档',
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName.endsWith('.docx') ? fileName : `${fileName}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast?.('已成功导出为 Word (.docx) 文档！', 'info');
   } catch (error) {
     console.error('DOCX export error:', error);
     showToast?.('导出 Word 文档失败', 'error');

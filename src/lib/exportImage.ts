@@ -1,3 +1,5 @@
+import { saveExportedBytes } from './exportSave';
+
 /**
  * Render document DOM element to a high-resolution long image (PNG)
  * Uses SVG foreignObject rasterization technique (100% native, 0 external bloat).
@@ -73,21 +75,22 @@ export async function exportElementToLongImage(
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(image, 0, 0, width, height);
 
-          canvas.toBlob((pngBlob) => {
+          canvas.toBlob(async (pngBlob) => {
             if (!pngBlob) {
               reject(new Error('Failed to create PNG blob'));
               return;
             }
-            const pngURL = URL.createObjectURL(pngBlob);
-            const a = document.createElement('a');
-            a.href = pngURL;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(pngURL);
             URL.revokeObjectURL(blobURL);
-            showToast?.('高清长图已成功导出！', 'info');
+            const arrayBuf = await pngBlob.arrayBuffer();
+            await saveExportedBytes({
+              bytes: new Uint8Array(arrayBuf),
+              defaultFileName: fileName.endsWith('.png') ? fileName : `${fileName}.png`,
+              filterName: 'PNG 高清长图 (*.png)',
+              extensions: ['png'],
+              mimeType: 'image/png',
+              showToast,
+              successLabel: '高清长图',
+            });
             resolve();
           }, 'image/png');
         } catch (err) {

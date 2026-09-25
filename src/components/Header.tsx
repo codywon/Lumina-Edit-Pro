@@ -6,6 +6,7 @@ import { marked } from 'marked';
 import BrandIcon from './BrandIcon';
 import { formatPanguSpacing } from '../lib/pangu';
 import { exportElementToLongImage } from '../lib/exportImage';
+import { exportMarkdownToDocx } from '../lib/exportDocx';
 
 interface HeaderProps {
   viewMode: 'wysiwyg' | 'source' | 'split';
@@ -326,6 +327,7 @@ function HeaderComponent({
         { label: '打开文件', shortcut: settings.shortcuts.openFile, action: onOpenFile },
         { label: '保存', shortcut: settings.shortcuts.saveFile, action: onSave },
         { label: '打印', shortcut: '', action: () => window.print() },
+        { label: '导出为Word (.docx)', action: () => exportMarkdownToDocx(content, 'Lumina-Document.docx', showToast) },
         { label: '导出为Markdown', action: () => handleExport('md') },
         { label: '导出为HTML', action: () => handleExport('html') },
         { label: '导出为PDF', action: () => handleExport('pdf') },

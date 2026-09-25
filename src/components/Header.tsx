@@ -40,6 +40,7 @@ interface HeaderProps {
   onInsertImage?: () => void | Promise<void>;
   onQuickOpen?: () => void;
   onOpenReplace?: () => void;
+  onOpenManual?: () => void;
 }
 
 function HeaderComponent({ 
@@ -74,7 +75,8 @@ function HeaderComponent({
   editor,
   onInsertImage,
   onQuickOpen,
-  onOpenReplace
+  onOpenReplace,
+  onOpenManual
 }: HeaderProps) {
   const { settings } = useSettings();
   const handlePanguSpacing = () => {
@@ -407,6 +409,7 @@ function HeaderComponent({
     {
       label: '帮助',
       items: [
+        { label: '操作手册', action: () => onOpenManual?.() },
         { label: '关于', action: onOpenAbout },
       ],
     },

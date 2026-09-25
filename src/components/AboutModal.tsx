@@ -5,9 +5,10 @@ import { X, Github, Mail, Globe, Sparkles, BookOpen } from 'lucide-react';
 interface AboutModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenManual?: () => void;
 }
 
-export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
+export default function AboutModal({ isOpen, onClose, onOpenManual }: AboutModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -72,24 +73,17 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
               </div>
 
               <div className="flex items-center justify-center gap-3">
-                <a
-                  href="docs/用户手册.html"
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={async (e) => {
-                    e.preventDefault();
-                    try {
-                      const { invoke } = await import('@tauri-apps/api/core');
-                      await invoke('app_open_user_manual');
-                    } catch {
-                      window.open('docs/用户手册.html', '_blank');
-                    }
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenManual?.();
                   }}
                   className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-accent text-white text-xs font-bold hover:bg-accent-strong transition-colors shadow-sm"
                 >
                   <BookOpen size={14} />
-                  操作手册 (HTML)
-                </a>
+                  操作手册
+                </button>
                 <button 
                   onClick={onClose}
                   className="px-5 py-2 rounded-lg border border-slate-200 dark:border-[#27272A] text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-[#27272A] transition-colors"

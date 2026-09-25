@@ -30,6 +30,7 @@ import Footer from './components/Footer';
 import SettingsModal from './components/SettingsModal';
 import AICenterModal from './components/AICenterModal';
 import AboutModal from './components/AboutModal';
+import UserManualModal from './components/UserManualModal';
 import QuickOpenModal from './components/QuickOpenModal';
 import FindReplaceModal from './components/FindReplaceModal';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -520,6 +521,7 @@ function AppContent() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAICenterOpen, setIsAICenterOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
   const [isQuickOpenVisible, setIsQuickOpenVisible] = useState(false);
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -2467,6 +2469,7 @@ function AppContent() {
           setIsToolbarVisible={setIsToolbarVisible}
           onQuickOpen={() => setIsQuickOpenVisible(true)}
           onOpenReplace={() => setIsFindReplaceOpen(true)}
+          onOpenManual={() => setIsManualOpen(true)}
           onToggleFullscreen={handleToggleFullscreen}
           onToggleFocusMode={handleToggleFocusMode}
           onWindowMinimize={handleWindowMinimize}
@@ -2654,7 +2657,15 @@ function AppContent() {
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <AICenterModal isOpen={isAICenterOpen} onClose={() => setIsAICenterOpen(false)} />
-      <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+      <AboutModal
+        isOpen={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
+        onOpenManual={() => setIsManualOpen(true)}
+      />
+      <UserManualModal
+        isOpen={isManualOpen}
+        onClose={() => setIsManualOpen(false)}
+      />
       <QuickOpenModal
         isOpen={isQuickOpenVisible}
         onClose={() => setIsQuickOpenVisible(false)}

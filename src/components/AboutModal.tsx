@@ -76,9 +76,14 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
                   href="docs/用户手册.html"
                   target="_blank"
                   rel="noreferrer"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.preventDefault();
-                    window.open('docs/用户手册.html', '_blank');
+                    try {
+                      const { invoke } = await import('@tauri-apps/api/core');
+                      await invoke('app_open_user_manual');
+                    } catch {
+                      window.open('docs/用户手册.html', '_blank');
+                    }
                   }}
                   className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-accent text-white text-xs font-bold hover:bg-accent-strong transition-colors shadow-sm"
                 >
@@ -94,8 +99,9 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
               </div>
             </div>
             
-            <div className="p-4 bg-slate-50 dark:bg-[#121214] border-t border-slate-100 dark:border-[#27272A] text-center">
-              <p className="text-[10px] text-slate-400">© 2024 Lumina Edit Pro. All rights reserved.</p>
+            <div className="p-4 bg-slate-50 dark:bg-[#121214] border-t border-slate-100 dark:border-[#27272A] text-center space-y-1">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Powered by codywon · 仅供学习和交流</p>
+              <p className="text-[10px] text-slate-400">个人使用免费许可 · 严禁任何商业用途 · © 2026 Lumina Edit Pro</p>
             </div>
           </motion.div>
         </div>

@@ -174,7 +174,7 @@ fn scan_directory_entries(dir: &Path, base: &Path) -> Vec<WorkspaceEntry> {
 fn app_health() -> NativeAppHealth {
     NativeAppHealth {
         app_name: "Lumina Edit Pro".into(),
-        version: "0.1.0".into(),
+        version: "1.0.0".into(),
         status: "ok".into(),
     }
 }
@@ -552,6 +552,54 @@ fn workspace_write_binary(payload: WorkspaceBinaryPayload) -> Result<(), String>
     fs::write(target, payload.bytes).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn app_open_user_manual() -> Result<(), String> {
+    let mut possible_paths = Vec::new();
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            possible_paths.push(parent.join("用户手册.html"));
+            possible_paths.push(parent.join("Lumina-Edit-Pro-用户手册.html"));
+            possible_paths.push(parent.join("USER_MANUAL.html"));
+            possible_paths.push(parent.join("docs").join("用户手册.html"));
+        }
+    }
+
+    possible_paths.push(PathBuf::from("docs/用户手册.html"));
+    possible_paths.push(PathBuf::from("用户手册.html"));
+    possible_paths.push(PathBuf::from("Lumina-Edit-Pro-用户手册.html"));
+    possible_paths.push(PathBuf::from("docs/USER_MANUAL.html"));
+
+    for path in possible_paths {
+        if path.is_file() {
+            let path_str = path.canonicalize().unwrap_or(path).to_string_lossy().to_string();
+            #[cfg(target_os = "windows")]
+            {
+                let mut cmd = std::process::Command::new("cmd");
+                cmd.args(["/C", "start", "", &path_str]);
+                cmd.creation_flags(0x08000000);
+                if cmd.spawn().is_ok() {
+                    return Ok(());
+                }
+            }
+            #[cfg(target_os = "macos")]
+            {
+                if std::process::Command::new("open").arg(&path_str).spawn().is_ok() {
+                    return Ok(());
+                }
+            }
+            #[cfg(target_os = "linux")]
+            {
+                if std::process::Command::new("xdg-open").arg(&path_str).spawn().is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -584,7 +632,8 @@ pub fn run() {
             workspace_rename_entry,
             workspace_delete_entry,
             workspace_reveal_entry,
-            workspace_write_binary
+            workspace_write_binary,
+            app_open_user_manual
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

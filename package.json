@@ -1,8 +1,8 @@
 {
   "name": "lumina-edit-pro",
   "private": true,
-  "version": "0.1.0",
-  "description": "Local-first AI Markdown workspace",
+  "version": "1.0.0",
+  "description": "Local-first AI Markdown workspace - Powered by codywon",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3188 --host=0.0.0.0",
@@ -12,9 +12,9 @@
     "lint": "tsc --noEmit",
     "test": "vitest run --environment jsdom",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build --no-bundle && node -e \"const fs=require('fs'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'src-tauri/target/release/Lumina-Edit-Pro.exe'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'Lumina-Edit-Pro.exe'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'src-tauri/target/debug/lumina-edit-pro.exe');\"",
+    "desktop:build": "tauri build --no-bundle && node -e \"const fs=require('fs'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'src-tauri/target/release/Lumina-Edit-Pro.exe'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'Lumina-Edit-Pro.exe'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'src-tauri/target/debug/lumina-edit-pro.exe'); fs.copyFileSync('docs/用户手册.html', 'src-tauri/target/release/用户手册.html'); fs.copyFileSync('docs/用户手册.html', '用户手册.html'); fs.copyFileSync('docs/USER_MANUAL.html', 'src-tauri/target/release/USER_MANUAL.html'); fs.copyFileSync('docs/USER_MANUAL.html', 'USER_MANUAL.html');\"",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build --no-bundle && node -e \"const fs=require('fs'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'src-tauri/target/release/Lumina-Edit-Pro.exe'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'Lumina-Edit-Pro.exe'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'src-tauri/target/debug/lumina-edit-pro.exe');\""
+    "tauri:build": "tauri build --no-bundle && node -e \"const fs=require('fs'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'src-tauri/target/release/Lumina-Edit-Pro.exe'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'Lumina-Edit-Pro.exe'); fs.copyFileSync('src-tauri/target/release/lumina-edit-pro.exe', 'src-tauri/target/debug/lumina-edit-pro.exe'); fs.copyFileSync('docs/用户手册.html', 'src-tauri/target/release/用户手册.html'); fs.copyFileSync('docs/用户手册.html', '用户手册.html'); fs.copyFileSync('docs/USER_MANUAL.html', 'src-tauri/target/release/USER_MANUAL.html'); fs.copyFileSync('docs/USER_MANUAL.html', 'USER_MANUAL.html');\""
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

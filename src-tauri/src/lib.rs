@@ -335,13 +335,14 @@ pub struct FileExportSavePayload {
 }
 
 #[tauri::command]
-async fn file_export_save(app: tauri::AppHandle, payload: FileExportSavePayload) -> Result<Option<String>, String> {
+async fn file_export_save(window: tauri::Window, app: tauri::AppHandle, payload: FileExportSavePayload) -> Result<Option<String>, String> {
     use std::sync::mpsc;
     let (tx, rx) = mpsc::channel();
 
     let ext_refs: Vec<&str> = payload.extensions.iter().map(|s| s.as_str()).collect();
     app.dialog()
         .file()
+        .set_parent(&window)
         .set_file_name(&payload.default_name)
         .add_filter(&payload.filter_name, &ext_refs)
         .save_file(move |file_path| {
@@ -366,12 +367,13 @@ async fn file_export_save(app: tauri::AppHandle, payload: FileExportSavePayload)
 }
 
 #[tauri::command]
-async fn file_pick_open(app: tauri::AppHandle) -> Result<Option<NativeFile>, String> {
+async fn file_pick_open(window: tauri::Window, app: tauri::AppHandle) -> Result<Option<NativeFile>, String> {
     use std::sync::mpsc;
     let (tx, rx) = mpsc::channel();
 
     app.dialog()
         .file()
+        .set_parent(&window)
         .add_filter("Markdown", &["md", "markdown", "txt"])
         .pick_file(move |file_path| {
             let _ = tx.send(file_path);
@@ -395,13 +397,16 @@ async fn file_pick_open(app: tauri::AppHandle) -> Result<Option<NativeFile>, Str
 
 // Workspace Commands
 #[tauri::command]
-async fn workspace_pick_open(app: tauri::AppHandle) -> Result<Option<NativeWorkspace>, String> {
+async fn workspace_pick_open(window: tauri::Window, app: tauri::AppHandle) -> Result<Option<NativeWorkspace>, String> {
     use std::sync::mpsc;
     let (tx, rx) = mpsc::channel();
 
-    app.dialog().file().pick_folder(move |dir_path| {
-        let _ = tx.send(dir_path);
-    });
+    app.dialog()
+        .file()
+        .set_parent(&window)
+        .pick_folder(move |dir_path| {
+            let _ = tx.send(dir_path);
+        });
 
     let selected = rx.recv().map_err(|e| e.to_string())?;
     if let Some(dir_path) = selected {

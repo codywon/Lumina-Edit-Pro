@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { generateDocxBytes } from './exportDocx';
 import { extractDocumentBaseName } from './exportSave';
 
-describe('generateDocxBytes (.docx OpenXML 2.0 commercial exporter)', () => {
+describe('generateDocxBytes (.docx OpenXML 2.0 multi-theme exporter)', () => {
   it('extracts the first heading as default export file base name', () => {
     const md = `# 酒店雷达系统对接接口文档\n\n正文内容`;
     expect(extractDocumentBaseName(md)).toBe('酒店雷达系统对接接口文档');
   });
 
-  it('generates a valid PKZIP archive containing OpenXML document, numbering, and styles', () => {
-    const md = `# 项目方案书
+  it('generates a valid PKZIP archive containing OpenXML document, numbering, styles, header and footer', () => {
+    const md = `# 养老机构智能体分析报告
 
 > [!NOTE]
 > 核心架构说明
@@ -23,7 +23,7 @@ const version = "1.0.0";
 \`\`\`
 `;
 
-    const bytes = generateDocxBytes(md, 'test.docx');
+    const bytes = generateDocxBytes(md, { themeId: 'report', title: '分析报告', includeHeaderFooter: true });
     expect(bytes[0]).toBe(0x50);
     expect(bytes[1]).toBe(0x4b);
     expect(bytes[2]).toBe(0x03);
@@ -34,12 +34,16 @@ const version = "1.0.0";
     expect(decoded).toContain('word/document.xml');
     expect(decoded).toContain('word/styles.xml');
     expect(decoded).toContain('word/numbering.xml');
-    expect(decoded).toContain('项目方案书');
-    expect(decoded).toContain('Heading1');
-    expect(decoded).toContain('<w:tbl>');
+    expect(decoded).toContain('word/header1.xml');
+    expect(decoded).toContain('word/footer1.xml');
+    expect(decoded).toContain('PAGE');
+    expect(decoded).toContain('NUMPAGES');
+    // Top banner for report theme
+    expect(decoded).toContain('养老机构智能体分析报告');
+    expect(decoded).toContain('Generate Time:');
   });
 
-  it('preserves tildes in ranges without false strikethroughs and indents list continuation paragraphs', () => {
+  it('preserves numeric ranges without false strikethroughs and indents list continuation paragraphs', () => {
     const specMd = `规则：
 • config_revision 必须为整数且严格递增（≥1，≤4294967295）；设备拒绝不大于当前版本的配置。
 • 除全部字段必填；sleep_observe_minutes 1~1440，deep_sleep_minutes 2~2880。
@@ -54,7 +58,7 @@ telemetry_profile：0=全量上报（默认），1=精简上报。
 • 校验失败：设备在 status 主题回 rejected + reason。
 处理流程：received → 持久化 persisted → 应用 applied。`;
 
-    const bytes = generateDocxBytes(specMd, 'spec.docx');
+    const bytes = generateDocxBytes(specMd, { themeId: 'report', title: '测试文档' });
     const decoded = new TextDecoder().decode(bytes);
 
     // 1. Tildes in numeric ranges (1~1440, 2~2880, 0.10~2.00) must NEVER be strikethrough
@@ -70,9 +74,26 @@ telemetry_profile：0=全量上报（默认），1=精简上报。
     expect(decoded).toContain('<w:ind w:left="480"/>');
     expect(decoded).toContain('telemetry_profile：0=全量上报');
     expect(decoded).toContain('处理流程：received');
+  });
 
-    // 4. Microsoft YaHei font used consistently
-    expect(decoded).toContain('Microsoft YaHei');
-    expect(decoded).toContain('<w:autoSpaceDE w:val="1"/>');
+  it('supports all 4 commercial themes (report, minimal, formal, whitepaper)', () => {
+    const md = `# 规范文档\n\n正文内容说明`;
+
+    const reportBytes = generateDocxBytes(md, { themeId: 'report' });
+    const reportDecoded = new TextDecoder().decode(reportBytes);
+    expect(reportDecoded).toContain('EC5B13');
+
+    const minimalBytes = generateDocxBytes(md, { themeId: 'minimal' });
+    const minimalDecoded = new TextDecoder().decode(minimalBytes);
+    expect(minimalDecoded).toContain('475569');
+
+    const formalBytes = generateDocxBytes(md, { themeId: 'formal' });
+    const formalDecoded = new TextDecoder().decode(formalBytes);
+    expect(formalDecoded).toContain('FangSong');
+    expect(formalDecoded).toContain('w:firstLine="420"');
+
+    const whitepaperBytes = generateDocxBytes(md, { themeId: 'whitepaper' });
+    const whitepaperDecoded = new TextDecoder().decode(whitepaperBytes);
+    expect(whitepaperDecoded).toContain('1E40AF');
   });
 });

@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import { extractDocumentBaseName, saveExportedBytes } from './exportSave';
+import { EXPORT_THEMES, ExportThemeConfig, ExportThemeId } from './exportThemes';
 
 /**
  * Pure TypeScript PKZIP Builder (Store method, 0 external dependencies)
@@ -112,36 +113,56 @@ interface RunFormat {
   code?: boolean;
   highlight?: boolean;
   color?: string;
+  fontAscii?: string;
+  fontEastAsia?: string;
   linkRId?: string;
+}
+
+export interface GenerateDocxOptions {
+  themeId?: ExportThemeId;
+  title?: string;
+  author?: string;
+  includeHeaderFooter?: boolean;
 }
 
 /**
  * Preprocess Markdown:
- * 1. Protect range expressions like `1~1440` from being falsely parsed as strike-through (`<del>`).
- *    In GFM, double tilde `~~deleted~~` is strike-through, but Marked treats single tilde `~` as strike too.
+ * 1. Protect numeric range expressions like `1~1440` from being falsely parsed as strike-through (`<del>`).
  * 2. Normalize Unicode bullet points (`•`, `●`, `▪`, `◦`) to standard Markdown `- ` bullets.
  */
 function preprocessMarkdown(markdown: string): string {
   const STRIKE_TOKEN = '___MARKDOWN_STRIKE_DOUBLE_TILDE___';
   let text = markdown.replace(/\r\n/g, '\n');
 
-  // Protect intentional ~~strikethrough~~
   text = text.replace(/~~/g, STRIKE_TOKEN);
-  // Neutralize remaining single ~ by converting to HTML entity so Marked never strikes out ranges like 1~1440
   text = text.replace(/~/g, '&#126;');
-  // Restore double tildes
   text = text.replace(new RegExp(STRIKE_TOKEN, 'g'), '~~');
 
-  // Normalize Unicode bullets at start of line
   text = text.replace(/^[•●▪◦]\s*/gm, '- ');
-
   return text;
 }
 
 /**
- * Convert Markdown string into a native, commercial-grade OpenXML (.docx) binary Uint8Array.
+ * Convert Markdown string into a native OpenXML (.docx) binary Uint8Array
+ * with selected commercial/executive theme and Word-native headers & footers.
  */
-export function generateDocxBytes(markdown: string, title = 'Lumina Document'): Uint8Array {
+export function generateDocxBytes(
+  markdown: string,
+  options: string | GenerateDocxOptions = 'Lumina Document'
+): Uint8Array {
+  const opts: GenerateDocxOptions =
+    typeof options === 'string'
+      ? { title: options, themeId: 'report', includeHeaderFooter: true }
+      : {
+          themeId: options.themeId || 'report',
+          title: options.title || extractDocumentBaseName(markdown, 'Lumina Document'),
+          author: options.author || 'codywon',
+          includeHeaderFooter: options.includeHeaderFooter !== false,
+        };
+
+  const theme: ExportThemeConfig = EXPORT_THEMES[opts.themeId || 'report'] || EXPORT_THEMES.report;
+  const docTitle = opts.title || extractDocumentBaseName(markdown, 'Lumina Document');
+
   const normalized = preprocessMarkdown(markdown);
   const html = marked.parse(normalized, { async: false, gfm: true, breaks: true }) as string;
   const parser = new DOMParser();
@@ -162,6 +183,19 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
   ];
   let nextRelId = 3;
 
+  if (opts.includeHeaderFooter) {
+    relationships.push({
+      id: 'rIdHeader',
+      type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header',
+      target: 'header1.xml',
+    });
+    relationships.push({
+      id: 'rIdFooter',
+      type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer',
+      target: 'footer1.xml',
+    });
+  }
+
   const registerHyperlink = (href: string): string => {
     const id = `rId${nextRelId++}`;
     relationships.push({
@@ -178,16 +212,17 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     const rPr: string[] = [];
 
     if (fmt.code) {
-      // Explicit inline code: Consolas monospace, 10pt, clean gray pill shading
       rPr.push('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:eastAsia="Microsoft YaHei"/>');
       rPr.push('<w:sz w:val="20"/><w:szCs w:val="20"/>');
       rPr.push('<w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>');
       rPr.push('<w:color w:val="0F172A"/>');
     } else {
-      // Standard commercial body font: Microsoft YaHei across Latin and East Asia for consistent metrics
-      rPr.push('<w:rFonts w:ascii="Microsoft YaHei" w:hAnsi="Microsoft YaHei" w:eastAsia="Microsoft YaHei" w:cs="Microsoft YaHei"/>');
-      if (fmt.color) {
-        rPr.push(`<w:color w:val="${fmt.color}"/>`);
+      const ascii = fmt.fontAscii || theme.fontAscii;
+      const eastAsia = fmt.fontEastAsia || theme.fontEastAsia;
+      rPr.push(`<w:rFonts w:ascii="${ascii}" w:hAnsi="${ascii}" w:eastAsia="${eastAsia}" w:cs="${ascii}"/>`);
+      const color = fmt.color || theme.bodyColor;
+      if (color) {
+        rPr.push(`<w:color w:val="${color}"/>`);
       }
     }
 
@@ -196,7 +231,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     if (fmt.strike) rPr.push('<w:strike/>');
     if (fmt.highlight) rPr.push('<w:highlight w:val="yellow"/>');
     if (fmt.linkRId) {
-      rPr.push('<w:color w:val="2563EB"/><w:u w:val="single"/>');
+      rPr.push(`<w:color w:val="${theme.accentColor}"/><w:u w:val="single"/>`);
     }
 
     const lines = text.split('\n');
@@ -220,7 +255,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
         const el = node as HTMLElement;
         const tag = el.tagName.toLowerCase();
         if (tag === 'strong' || tag === 'b') {
-          out += renderInlineNodes(el.childNodes, { ...fmt, bold: true, color: fmt.color || '0F172A' });
+          out += renderInlineNodes(el.childNodes, { ...fmt, bold: true });
         } else if (tag === 'em' || tag === 'i') {
           out += renderInlineNodes(el.childNodes, { ...fmt, italic: true });
         } else if (tag === 'del' || tag === 's') {
@@ -253,9 +288,6 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     return out;
   };
 
-  /**
-   * Split a sequence of inline childNodes by `<br>` tags into distinct logical lines.
-   */
   const splitNodesByBr = (nodes: ChildNode[]): ChildNode[][] => {
     const groups: ChildNode[][] = [];
     let current: ChildNode[] = [];
@@ -278,10 +310,6 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     );
   };
 
-  /**
-   * Render list item (bullet or numbered) with Word-native numbering.xml and
-   * proper indentation on continuation lines.
-   */
   const renderListElement = (listEl: HTMLElement, level = 0): string => {
     const isOrdered = listEl.tagName.toLowerCase() === 'ol';
     const numId = isOrdered ? 2 : 1;
@@ -291,28 +319,22 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
 
     const items = Array.from(listEl.children).filter((c) => c.tagName.toLowerCase() === 'li');
     items.forEach((li) => {
-      // Gather lines inside this li (whether wrapped in <p> or separated by <br>)
       const directNodes = Array.from(li.childNodes);
       const childParagraphs = Array.from(li.children).filter((c) => c.tagName.toLowerCase() === 'p');
 
       const allLineSegments: ChildNode[][] = [];
-
       if (childParagraphs.length > 0) {
         childParagraphs.forEach((p) => {
-          const segs = splitNodesByBr(Array.from(p.childNodes));
-          allLineSegments.push(...segs);
+          allLineSegments.push(...splitNodesByBr(Array.from(p.childNodes)));
         });
       } else {
-        const segs = splitNodesByBr(directNodes);
-        allLineSegments.push(...segs);
+        allLineSegments.push(...splitNodesByBr(directNodes));
       }
 
       if (allLineSegments.length === 0) {
         allLineSegments.push(directNodes);
       }
 
-      // Render first line with Word bullet/numbering
-      // Render subsequent lines as indented continuation paragraphs aligned with text
       allLineSegments.forEach((segNodes, segIdx) => {
         const isFirst = segIdx === 0;
         const isLast = segIdx === allLineSegments.length - 1;
@@ -345,7 +367,9 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     return out;
   };
 
-  const renderBlockElement = (el: HTMLElement): string => {
+  let renderedTopBanner = false;
+
+  const renderBlockElement = (el: HTMLElement, isFirstChild = false): string => {
     const tag = el.tagName.toLowerCase();
 
     // Headings H1 ~ H6
@@ -353,12 +377,109 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       const level = parseInt(tag.slice(1), 10);
       const align = el.getAttribute('align') || el.style.textAlign || '';
       const jc = align === 'center' ? '<w:jc w:val="center"/>' : align === 'right' ? '<w:jc w:val="right"/>' : '';
+
+      // If theme is 'report' and hasBanner is true, render the first H1 as a high-impact colored Banner!
+      if (level === 1 && theme.hasBanner && !renderedTopBanner && isFirstChild) {
+        renderedTopBanner = true;
+        const h1Text = el.textContent?.trim() || docTitle;
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()} ${String(
+          now.getHours()
+        ).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+        return `<w:tbl>
+          <w:tblPr>
+            <w:tblW w:w="5000" w:type="pct"/>
+            <w:tblBorders>
+              <w:top w:val="none"/>
+              <w:bottom w:val="none"/>
+              <w:left w:val="none"/>
+              <w:right w:val="none"/>
+              <w:insideH w:val="none"/>
+              <w:insideV w:val="none"/>
+            </w:tblBorders>
+            <w:tblLayout w:type="autofit"/>
+          </w:tblPr>
+          <w:tr>
+            <w:tc>
+              <w:tcPr>
+                <w:shd w:val="clear" w:color="auto" w:fill="${theme.bannerBg || 'EC5B13'}"/>
+                <w:tcMar>
+                  <w:top w:w="480" w:type="dxa"/>
+                  <w:bottom w:w="480" w:type="dxa"/>
+                  <w:left w:w="360" w:type="dxa"/>
+                  <w:right w:w="360" w:type="dxa"/>
+                </w:tcMar>
+                <w:vAlign w:val="center"/>
+              </w:tcPr>
+              <w:p>
+                <w:pPr>
+                  <w:jc w:val="center"/>
+                  <w:spacing w:before="60" w:after="60"/>
+                  <w:pStyle w:val="Heading1"/>
+                  <w:outlineLvl w:val="0"/>
+                </w:pPr>
+                <w:r>
+                  <w:rPr>
+                    <w:rFonts w:ascii="${theme.fontHeading || theme.fontEastAsia}" w:eastAsia="${
+          theme.fontHeading || theme.fontEastAsia
+        }"/>
+                    <w:b/><w:bCs/>
+                    <w:sz w:val="46"/><w:szCs w:val="46"/>
+                    <w:color w:val="${theme.bannerTextColor || 'FFFFFF'}"/>
+                  </w:rPr>
+                  <w:t xml:space="preserve">${escapeXml(h1Text)}</w:t>
+                </w:r>
+              </w:p>
+            </w:tc>
+          </w:tr>
+        </w:tbl>
+        <w:p>
+          <w:pPr>
+            <w:spacing w:before="160" w:after="160"/>
+            <w:pBdr>
+              <w:bottom w:val="single" w:sz="12" w:space="8" w:color="${theme.metadataBorderColor || 'EC5B13'}"/>
+            </w:pBdr>
+            <w:tabs>
+              <w:tab w:val="right" w:pos="9026"/>
+            </w:tabs>
+          </w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Segoe UI" w:eastAsia="${theme.fontEastAsia}"/>
+              <w:sz w:val="18"/>
+              <w:color w:val="64748B"/>
+            </w:rPr>
+            <w:t xml:space="preserve">Generate Time: ${dateStr}</w:t>
+          </w:r>
+          <w:r><w:tab/></w:r>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Segoe UI" w:eastAsia="${theme.fontEastAsia}"/>
+              <w:sz w:val="18"/>
+              <w:color w:val="64748B"/>
+            </w:rPr>
+            <w:t xml:space="preserve">Lumina Edit Pro 商业分析报告</w:t>
+          </w:r>
+        </w:p>`;
+      }
+
+      const headingColor =
+        level === 1
+          ? theme.primaryHeadingColor
+          : level === 2
+          ? theme.secondaryHeadingColor
+          : theme.id === 'report'
+          ? '0F172A'
+          : '1E293B';
+
       const bottomBorder =
         level === 1
-          ? '<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="6" w:color="CBD5E1"/></w:pBdr>'
-          : level === 2
-          ? '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="E2E8F0"/></w:pBdr>'
+          ? `<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="6" w:color="${theme.accentColor}"/></w:pBdr>`
+          : level === 2 && theme.id === 'whitepaper'
+          ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="${theme.tableBorderColor}"/></w:pBdr>`
           : '';
+
       return `<w:p>
         <w:pPr>
           <w:pStyle w:val="Heading${level}"/>
@@ -369,7 +490,12 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
           ${jc}
           ${bottomBorder}
         </w:pPr>
-        ${renderInlineNodes(el.childNodes, { bold: true, color: '0F172A' })}
+        ${renderInlineNodes(el.childNodes, {
+          bold: true,
+          color: headingColor,
+          fontAscii: theme.fontHeading || theme.fontAscii,
+          fontEastAsia: theme.fontHeading || theme.fontEastAsia,
+        })}
       </w:p>`;
     }
 
@@ -384,7 +510,6 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
           ? '<w:jc w:val="right"/>'
           : '<w:jc w:val="both"/>';
 
-      // Section lead label (e.g. `规则：`, `说明：`, `参数要求：`)
       if (/^[^\n：:]{2,14}[：:]$/.test(rawText)) {
         return `<w:p>
           <w:pPr>
@@ -392,14 +517,17 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
             <w:spacing w:before="200" w:after="80" w:line="288" w:lineRule="auto"/>
             ${jc}
           </w:pPr>
-          ${renderRun(rawText, { bold: true, color: '0F172A' })}
+          ${renderRun(rawText, { bold: true, color: theme.primaryHeadingColor })}
         </w:p>`;
       }
+
+      const indentXml = theme.firstLineIndent ? `<w:ind w:firstLine="${theme.firstLineIndent}"/>` : '';
 
       const segments = splitNodesByBr(Array.from(el.childNodes));
       if (segments.length <= 1) {
         return `<w:p>
           <w:pPr>
+            ${indentXml}
             <w:spacing w:before="40" w:after="120" w:line="288" w:lineRule="auto"/>
             ${jc}
           </w:pPr>
@@ -411,6 +539,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
         .map(
           (seg, idx) => `<w:p>
           <w:pPr>
+            ${indentXml}
             <w:spacing w:before="20" w:after="${idx === segments.length - 1 ? 120 : 60}" w:line="288" w:lineRule="auto"/>
             ${jc}
           </w:pPr>
@@ -424,8 +553,8 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     if (tag === 'blockquote') {
       const rawText = (el.textContent || '').trim();
       const calloutMatch = rawText.match(/^\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]/i);
-      let borderColor = '64748B';
-      let bgFill = 'F8FAFC';
+      let borderColor = theme.calloutDefaultBorder;
+      let bgFill = theme.calloutDefaultBg;
       let badgeTitle = '';
 
       if (calloutMatch) {
@@ -492,7 +621,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
           <w:pBdr>
             <w:top w:val="single" w:sz="4" w:space="6" w:color="CBD5E1"/>
             <w:bottom w:val="single" w:sz="4" w:space="6" w:color="CBD5E1"/>
-            <w:left w:val="single" w:sz="16" w:space="8" w:color="64748B"/>
+            <w:left w:val="single" w:sz="16" w:space="8" w:color="${theme.accentColor}"/>
             <w:right w:val="single" w:sz="4" w:space="8" w:color="CBD5E1"/>
           </w:pBdr>
           <w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/>
@@ -524,22 +653,22 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
           const align = cellEl.getAttribute('align') || cellEl.style.textAlign || 'left';
           const jc = align === 'center' ? '<w:jc w:val="center"/>' : align === 'right' ? '<w:jc w:val="right"/>' : '<w:jc w:val="left"/>';
           const shd = isHeaderRow
-            ? '<w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>'
+            ? `<w:shd w:val="clear" w:color="auto" w:fill="${theme.tableHeaderBg}"/>`
             : rowIdx % 2 === 1
             ? '<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>'
-            : '<w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/>';
+            : '<w:shd w:val="clear" w:color="auto" w:fill="FAFAFA"/>';
 
           const bottomBdr = isHeaderRow
-            ? '<w:bottom w:val="single" w:sz="12" w:space="0" w:color="94A3B8"/>'
-            : '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>';
+            ? `<w:bottom w:val="single" w:sz="12" w:space="0" w:color="${theme.tableBorderColor}"/>`
+            : `<w:bottom w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>`;
 
           cellsXml += `<w:tc>
             <w:tcPr>
               <w:tcBorders>
-                <w:top w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+                <w:top w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
                 ${bottomBdr}
-                <w:left w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
-                <w:right w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+                <w:left w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
+                <w:right w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
               </w:tcBorders>
               ${shd}
               <w:tcMar>
@@ -555,7 +684,10 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
                 <w:spacing w:before="20" w:after="20" w:line="280" w:lineRule="auto"/>
                 ${jc}
               </w:pPr>
-              ${renderInlineNodes(cellEl.childNodes, { bold: isHeaderRow, color: isHeaderRow ? '0F172A' : '1E293B' })}
+              ${renderInlineNodes(cellEl.childNodes, {
+                bold: isHeaderRow,
+                color: isHeaderRow ? theme.tableHeaderTextColor : theme.bodyColor,
+              })}
             </w:p>
           </w:tc>`;
         });
@@ -567,12 +699,12 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
         <w:tblPr>
           <w:tblW w:w="5000" w:type="pct"/>
           <w:tblBorders>
-            <w:top w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
-            <w:bottom w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
-            <w:left w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
-            <w:right w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
-            <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
-            <w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+            <w:top w:val="single" w:sz="8" w:space="0" w:color="${theme.tableBorderColor}"/>
+            <w:bottom w:val="single" w:sz="8" w:space="0" w:color="${theme.tableBorderColor}"/>
+            <w:left w:val="single" w:sz="6" w:space="0" w:color="${theme.tableBorderColor}"/>
+            <w:right w:val="single" w:sz="6" w:space="0" w:color="${theme.tableBorderColor}"/>
+            <w:insideH w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
+            <w:insideV w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
           </w:tblBorders>
           <w:tblLayout w:type="autofit"/>
         </w:tblPr>
@@ -585,7 +717,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       return `<w:p>
         <w:pPr>
           <w:spacing w:before="160" w:after="160"/>
-          <w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="CBD5E1"/></w:pBdr>
+          <w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="${theme.tableBorderColor}"/></w:pBdr>
         </w:pPr>
       </w:p>`;
     }
@@ -594,8 +726,9 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
   };
 
   let bodyXml = '';
-  Array.from(root.children).forEach((child) => {
-    bodyXml += renderBlockElement(child as HTMLElement);
+  const rootChildren = Array.from(root.children);
+  rootChildren.forEach((child, idx) => {
+    bodyXml += renderBlockElement(child as HTMLElement, idx === 0);
   });
 
   if (!bodyXml) {
@@ -609,6 +742,12 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+  ${
+    opts.includeHeaderFooter
+      ? `<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+  <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>`
+      : ''
+  }
 </Types>`;
 
   const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -630,7 +769,6 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
 
   const numberingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <!-- Abstract Num 0: Word Standard Multi-level Bullet List with Explicit Tab Stops -->
   <w:abstractNum w:abstractNumId="0">
     <w:multiLevelType w:val="hybridMultilevel"/>
     <w:lvl w:ilvl="0">
@@ -644,7 +782,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       </w:pPr>
       <w:rPr>
         <w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:hint="default"/>
-        <w:color w:val="0F172A"/>
+        <w:color w:val="${theme.accentColor}"/>
       </w:rPr>
     </w:lvl>
     <w:lvl w:ilvl="1">
@@ -658,7 +796,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       </w:pPr>
       <w:rPr>
         <w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:hint="default"/>
-        <w:color w:val="334155"/>
+        <w:color w:val="475569"/>
       </w:rPr>
     </w:lvl>
     <w:lvl w:ilvl="2">
@@ -672,11 +810,10 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       </w:pPr>
       <w:rPr>
         <w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:hint="default"/>
-        <w:color w:val="475569"/>
+        <w:color w:val="64748B"/>
       </w:rPr>
     </w:lvl>
   </w:abstractNum>
-  <!-- Abstract Num 1: Word Standard Ordered Numbered List -->
   <w:abstractNum w:abstractNumId="1">
     <w:multiLevelType w:val="hybridMultilevel"/>
     <w:lvl w:ilvl="0">
@@ -689,8 +826,9 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
         <w:ind w:left="480" w:hanging="480"/>
       </w:pPr>
       <w:rPr>
-        <w:rFonts w:ascii="Microsoft YaHei" w:hAnsi="Microsoft YaHei" w:eastAsia="Microsoft YaHei"/>
-        <w:color w:val="0F172A"/>
+        <w:rFonts w:ascii="${theme.fontAscii}" w:hAnsi="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+        <w:b/><w:bCs/>
+        <w:color w:val="${theme.accentColor}"/>
       </w:rPr>
     </w:lvl>
   </w:abstractNum>
@@ -703,10 +841,10 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
   <w:docDefaults>
     <w:rPrDefault>
       <w:rPr>
-        <w:rFonts w:ascii="Microsoft YaHei" w:hAnsi="Microsoft YaHei" w:eastAsia="Microsoft YaHei" w:cs="Microsoft YaHei"/>
+        <w:rFonts w:ascii="${theme.fontAscii}" w:hAnsi="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}" w:cs="${theme.fontAscii}"/>
         <w:sz w:val="21"/>
         <w:szCs w:val="21"/>
-        <w:color w:val="1E293B"/>
+        <w:color w:val="${theme.bodyColor}"/>
         <w:lang w:val="en-US" w:eastAsia="zh-CN"/>
       </w:rPr>
     </w:rPrDefault>
@@ -740,7 +878,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="0"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="36"/><w:szCs w:val="36"/><w:color w:val="0F172A"/></w:rPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="38"/><w:szCs w:val="38"/><w:color w:val="${theme.primaryHeadingColor}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading2">
     <w:name w:val="heading 2"/>
@@ -748,7 +886,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="1"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="28"/><w:szCs w:val="28"/><w:color w:val="0F172A"/></w:rPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="30"/><w:szCs w:val="30"/><w:color w:val="${theme.secondaryHeadingColor}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading3">
     <w:name w:val="heading 3"/>
@@ -756,7 +894,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="2"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="24"/><w:szCs w:val="24"/><w:color w:val="0F172A"/></w:rPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="25"/><w:szCs w:val="25"/><w:color w:val="${theme.secondaryHeadingColor}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading4">
     <w:name w:val="heading 4"/>
@@ -764,15 +902,97 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="3"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="22"/><w:szCs w:val="22"/><w:color w:val="1E293B"/></w:rPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="22"/><w:szCs w:val="22"/><w:color w:val="${theme.bodyColor}"/></w:rPr>
   </w:style>
 </w:styles>`;
+
+  const headerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p>
+    <w:pPr>
+      <w:jc w:val="right"/>
+      <w:pBdr>
+        <w:bottom w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/>
+      </w:pBdr>
+    </w:pPr>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+        <w:sz w:val="17"/><w:szCs w:val="17"/>
+        <w:color w:val="64748B"/>
+      </w:rPr>
+      <w:t xml:space="preserve">${escapeXml(docTitle)}</w:t>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+
+  const footerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p>
+    <w:pPr>
+      <w:jc w:val="center"/>
+    </w:pPr>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+        <w:sz w:val="18"/><w:szCs w:val="18"/>
+        <w:color w:val="94A3B8"/>
+      </w:rPr>
+      <w:t xml:space="preserve">第 </w:t>
+    </w:r>
+    <w:fldSimple w:instr="PAGE">
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+          <w:sz w:val="18"/><w:szCs w:val="18"/>
+          <w:color w:val="64748B"/>
+        </w:rPr>
+        <w:t>1</w:t>
+      </w:r>
+    </w:fldSimple>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+        <w:sz w:val="18"/><w:szCs w:val="18"/>
+        <w:color w:val="94A3B8"/>
+      </w:rPr>
+      <w:t xml:space="preserve"> 页 / 共 </w:t>
+    </w:r>
+    <w:fldSimple w:instr="NUMPAGES">
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+          <w:sz w:val="18"/><w:szCs w:val="18"/>
+          <w:color w:val="64748B"/>
+        </w:rPr>
+        <w:t>1</w:t>
+      </w:r>
+    </w:fldSimple>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+        <w:sz w:val="18"/><w:szCs w:val="18"/>
+        <w:color w:val="94A3B8"/>
+      </w:rPr>
+      <w:t xml:space="preserve"> 页</w:t>
+    </w:r>
+  </w:p>
+</w:ftr>`;
+
+  const headerRefXml = opts.includeHeaderFooter
+    ? `<w:headerReference w:type="default" r:id="rIdHeader"/>`
+    : '';
+  const footerRefXml = opts.includeHeaderFooter
+    ? `<w:footerReference w:type="default" r:id="rIdFooter"/>`
+    : '';
 
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:body>
     ${bodyXml}
     <w:sectPr>
+      ${headerRefXml}
+      ${footerRefXml}
       <w:pgSz w:w="11906" w:h="16838"/>
       <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>
     </w:sectPr>
@@ -780,27 +1000,35 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
 </w:document>`;
 
   const encoder = new TextEncoder();
-  return buildZipArchive([
+  const zipFiles = [
     { name: '[Content_Types].xml', data: encoder.encode(contentTypesXml) },
     { name: '_rels/.rels', data: encoder.encode(rootRelsXml) },
     { name: 'word/_rels/document.xml.rels', data: encoder.encode(wordRelsXml) },
     { name: 'word/numbering.xml', data: encoder.encode(numberingXml) },
     { name: 'word/styles.xml', data: encoder.encode(stylesXml) },
     { name: 'word/document.xml', data: encoder.encode(documentXml) },
-  ]);
+  ];
+
+  if (opts.includeHeaderFooter) {
+    zipFiles.push({ name: 'word/header1.xml', data: encoder.encode(headerXml) });
+    zipFiles.push({ name: 'word/footer1.xml', data: encoder.encode(footerXml) });
+  }
+
+  return buildZipArchive(zipFiles);
 }
 
 export async function exportMarkdownToDocx(
   markdown: string,
   fileName?: string,
-  showToast?: (msg: string, level?: 'info' | 'warning' | 'error') => void
+  showToast?: (msg: string, level?: 'info' | 'warning' | 'error') => void,
+  themeId: ExportThemeId = 'report'
 ): Promise<void> {
   try {
     const baseName = fileName
       ? fileName.replace(/\.docx$/i, '')
       : extractDocumentBaseName(markdown, 'Lumina-Document');
     const targetFileName = `${baseName}.docx`;
-    const bytes = generateDocxBytes(markdown, baseName);
+    const bytes = generateDocxBytes(markdown, { title: baseName, themeId, includeHeaderFooter: true });
 
     await saveExportedBytes({
       bytes,

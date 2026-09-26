@@ -31,6 +31,7 @@ import SettingsModal from './components/SettingsModal';
 import AICenterModal from './components/AICenterModal';
 import AboutModal from './components/AboutModal';
 import UserManualModal from './components/UserManualModal';
+import ExportModal from './components/ExportModal';
 import QuickOpenModal from './components/QuickOpenModal';
 import FindReplaceModal from './components/FindReplaceModal';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -522,6 +523,7 @@ function AppContent() {
   const [isAICenterOpen, setIsAICenterOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
+  const [isExportDocxModalOpen, setIsExportDocxModalOpen] = useState(false);
   const [isQuickOpenVisible, setIsQuickOpenVisible] = useState(false);
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -2470,6 +2472,7 @@ function AppContent() {
           onQuickOpen={() => setIsQuickOpenVisible(true)}
           onOpenReplace={() => setIsFindReplaceOpen(true)}
           onOpenManual={() => setIsManualOpen(true)}
+          onOpenExportDocx={() => setIsExportDocxModalOpen(true)}
           onToggleFullscreen={handleToggleFullscreen}
           onToggleFocusMode={handleToggleFocusMode}
           onWindowMinimize={handleWindowMinimize}
@@ -2665,6 +2668,12 @@ function AppContent() {
       <UserManualModal
         isOpen={isManualOpen}
         onClose={() => setIsManualOpen(false)}
+      />
+      <ExportModal
+        isOpen={isExportDocxModalOpen}
+        onClose={() => setIsExportDocxModalOpen(false)}
+        content={content}
+        showToast={showToast}
       />
       <QuickOpenModal
         isOpen={isQuickOpenVisible}

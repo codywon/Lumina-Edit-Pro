@@ -333,7 +333,7 @@ function HeaderComponent({
         { label: '打开文件', shortcut: settings.shortcuts.openFile, action: onOpenFile },
         { label: '保存', shortcut: settings.shortcuts.saveFile, action: onSave },
         { label: '打印', shortcut: '', action: () => window.print() },
-        { label: '导出为Word (.docx)...', action: () => onOpenExportDocx ? onOpenExportDocx() : void exportMarkdownToDocx(content, undefined, showToast) },
+        { label: '导出Word', action: () => onOpenExportDocx ? onOpenExportDocx() : void exportMarkdownToDocx(content, undefined, showToast) },
         { label: '导出为Markdown', action: () => handleExport('md') },
         { label: '导出为HTML', action: () => handleExport('html') },
         { label: '导出为PDF', action: () => handleExport('pdf') },

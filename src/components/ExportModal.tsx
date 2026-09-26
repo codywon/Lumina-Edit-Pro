@@ -95,10 +95,10 @@ export default function ExportModal({ isOpen, onClose, content, showToast }: Exp
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    导出为 Word (.docx) 文档
+                    导出Word
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    内置原生 OpenXML 引擎 · 零外部依赖 · 出版级排版
+                    严格对齐国家公文与科技行业出版规范 · 原生 OpenXML 引擎
                   </p>
                 </div>
               </div>
@@ -130,7 +130,7 @@ export default function ExportModal({ isOpen, onClose, content, showToast }: Exp
               {/* Theme Grid */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  选择排版主题风格 (4大商用标准)
+                  选择排版主题风格 (4大行业权威标准规范)
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   {(Object.keys(EXPORT_THEMES) as ExportThemeId[]).map((tId) => {
@@ -164,6 +164,9 @@ export default function ExportModal({ isOpen, onClose, content, showToast }: Exp
                           </div>
                           <p className="text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-1">
                             {cfg.tagline}
+                          </p>
+                          <p className="text-[11px] font-semibold text-accent mt-0.5">
+                            {cfg.standardRef}
                           </p>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
                             {cfg.description}
@@ -213,7 +216,7 @@ export default function ExportModal({ isOpen, onClose, content, showToast }: Exp
                 className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-accent text-white text-xs font-bold hover:bg-accent-strong transition-colors shadow-sm disabled:opacity-50"
               >
                 <FileDown size={15} />
-                <span>{isExporting ? '正在生成...' : '立即导出 (.docx)'}</span>
+                <span>{isExporting ? '正在生成...' : '立即导出 Word'}</span>
               </button>
             </div>
           </motion.div>

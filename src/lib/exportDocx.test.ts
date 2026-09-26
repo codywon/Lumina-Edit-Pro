@@ -90,10 +90,10 @@ telemetry_profile：0=全量上报（默认），1=精简上报。
     const formalBytes = generateDocxBytes(md, { themeId: 'formal' });
     const formalDecoded = new TextDecoder().decode(formalBytes);
     expect(formalDecoded).toContain('FangSong');
-    expect(formalDecoded).toContain('w:firstLine="420"');
+    expect(formalDecoded).toContain('w:firstLine="640"');
 
     const whitepaperBytes = generateDocxBytes(md, { themeId: 'whitepaper' });
     const whitepaperDecoded = new TextDecoder().decode(whitepaperBytes);
-    expect(whitepaperDecoded).toContain('1E40AF');
+    expect(whitepaperDecoded).toContain('003366');
   });
 });

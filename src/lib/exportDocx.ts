@@ -144,7 +144,7 @@ function preprocessMarkdown(markdown: string): string {
 
 /**
  * Convert Markdown string into a native OpenXML (.docx) binary Uint8Array
- * with selected commercial/executive theme and Word-native headers & footers.
+ * with selected commercial/executive theme strictly aligned with industry standards.
  */
 export function generateDocxBytes(
   markdown: string,
@@ -152,15 +152,15 @@ export function generateDocxBytes(
 ): Uint8Array {
   const opts: GenerateDocxOptions =
     typeof options === 'string'
-      ? { title: options, themeId: 'report', includeHeaderFooter: true }
+      ? { title: options, themeId: 'whitepaper', includeHeaderFooter: true }
       : {
-          themeId: options.themeId || 'report',
+          themeId: options.themeId || 'whitepaper',
           title: options.title || extractDocumentBaseName(markdown, 'Lumina Document'),
           author: options.author || 'codywon',
           includeHeaderFooter: options.includeHeaderFooter !== false,
         };
 
-  const theme: ExportThemeConfig = EXPORT_THEMES[opts.themeId || 'report'] || EXPORT_THEMES.report;
+  const theme: ExportThemeConfig = EXPORT_THEMES[opts.themeId || 'whitepaper'] || EXPORT_THEMES.whitepaper;
   const docTitle = opts.title || extractDocumentBaseName(markdown, 'Lumina Document');
 
   const normalized = preprocessMarkdown(markdown);
@@ -338,14 +338,14 @@ export function generateDocxBytes(
       allLineSegments.forEach((segNodes, segIdx) => {
         const isFirst = segIdx === 0;
         const isLast = segIdx === allLineSegments.length - 1;
-        const spacingAfter = isLast ? 100 : 40;
+        const spacingAfter = isLast ? (theme.id === 'formal' ? 0 : 100) : (theme.id === 'formal' ? 0 : 40);
 
         if (isFirst) {
           out += `<w:p>
             <w:pPr>
               <w:pStyle w:val="ListParagraph"/>
               <w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="${numId}"/></w:numPr>
-              <w:spacing w:before="40" w:after="${spacingAfter}" w:line="288" w:lineRule="auto"/>
+              <w:spacing w:before="${theme.spaceBeforeParagraph}" w:after="${spacingAfter}" w:line="${theme.lineSpacing}" w:lineRule="${theme.lineSpacingRule}"/>
               <w:jc w:val="both"/>
             </w:pPr>
             ${renderInlineNodes(segNodes)}
@@ -355,7 +355,7 @@ export function generateDocxBytes(
             <w:pPr>
               <w:pStyle w:val="ListParagraph"/>
               <w:ind w:left="${leftIndent}"/>
-              <w:spacing w:before="20" w:after="${spacingAfter}" w:line="288" w:lineRule="auto"/>
+              <w:spacing w:before="0" w:after="${spacingAfter}" w:line="${theme.lineSpacing}" w:lineRule="${theme.lineSpacingRule}"/>
               <w:jc w:val="both"/>
             </w:pPr>
             ${renderInlineNodes(segNodes)}
@@ -378,7 +378,7 @@ export function generateDocxBytes(
       const align = el.getAttribute('align') || el.style.textAlign || '';
       const jc = align === 'center' ? '<w:jc w:val="center"/>' : align === 'right' ? '<w:jc w:val="right"/>' : '';
 
-      // If theme is 'report' and hasBanner is true, render the first H1 as a high-impact colored Banner!
+      // Commercial Report Theme Top Banner (matching Executive Analysis Reports)
       if (level === 1 && theme.hasBanner && !renderedTopBanner && isFirstChild) {
         renderedTopBanner = true;
         const h1Text = el.textContent?.trim() || docTitle;
@@ -421,9 +421,7 @@ export function generateDocxBytes(
                 </w:pPr>
                 <w:r>
                   <w:rPr>
-                    <w:rFonts w:ascii="${theme.fontHeading || theme.fontEastAsia}" w:eastAsia="${
-          theme.fontHeading || theme.fontEastAsia
-        }"/>
+                    <w:rFonts w:ascii="${theme.fontHeadingAscii}" w:eastAsia="${theme.fontHeadingEastAsia}"/>
                     <w:b/><w:bCs/>
                     <w:sz w:val="46"/><w:szCs w:val="46"/>
                     <w:color w:val="${theme.bannerTextColor || 'FFFFFF'}"/>
@@ -441,7 +439,7 @@ export function generateDocxBytes(
               <w:bottom w:val="single" w:sz="12" w:space="8" w:color="${theme.metadataBorderColor || 'EC5B13'}"/>
             </w:pBdr>
             <w:tabs>
-              <w:tab w:val="right" w:pos="9026"/>
+              <w:tab w:val="right" w:pos="8845"/>
             </w:tabs>
           </w:pPr>
           <w:r>
@@ -464,21 +462,37 @@ export function generateDocxBytes(
         </w:p>`;
       }
 
-      const headingColor =
-        level === 1
-          ? theme.primaryHeadingColor
-          : level === 2
-          ? theme.secondaryHeadingColor
-          : theme.id === 'report'
-          ? '0F172A'
-          : '1E293B';
+      // GB/T 9704-2012 Formal Official Document Heading Hierarchy:
+      // H1 = 三号黑体 (SimHei); H2 = 三号楷体 (KaiTi); H3 = 三号仿宋加粗 (FangSong); H4 = 三号仿宋
+      let headingFontEastAsia = theme.fontHeadingEastAsia;
+      let headingColor = theme.primaryHeadingColor;
+
+      if (theme.id === 'formal') {
+        headingColor = '000000';
+        if (level === 1) headingFontEastAsia = 'SimHei';
+        else if (level === 2) headingFontEastAsia = 'KaiTi';
+        else headingFontEastAsia = 'FangSong';
+      } else {
+        headingColor =
+          level === 1
+            ? theme.primaryHeadingColor
+            : level === 2
+            ? theme.secondaryHeadingColor
+            : theme.tertiaryHeadingColor;
+      }
 
       const bottomBorder =
-        level === 1
+        level === 1 && theme.id === 'whitepaper'
           ? `<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="6" w:color="${theme.accentColor}"/></w:pBdr>`
+          : level === 1 && theme.id === 'minimal'
+          ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="6" w:color="${theme.tableBorderColor}"/></w:pBdr>`
           : level === 2 && theme.id === 'whitepaper'
-          ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="${theme.tableBorderColor}"/></w:pBdr>`
+          ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="${theme.tableInnerBorderColor}"/></w:pBdr>`
           : '';
+
+      const headingIndent = theme.id === 'formal' && theme.firstLineIndent
+        ? `<w:ind w:firstLine="${theme.firstLineIndent}"/>`
+        : '';
 
       return `<w:p>
         <w:pPr>
@@ -486,15 +500,16 @@ export function generateDocxBytes(
           <w:keepNext/>
           <w:keepLines/>
           <w:outlineLvl w:val="${level - 1}"/>
-          <w:spacing w:before="${level === 1 ? 360 : level === 2 ? 280 : 200}" w:after="${level <= 2 ? 140 : 80}"/>
+          ${headingIndent}
+          <w:spacing w:before="${level === 1 ? 360 : level === 2 ? 280 : 200}" w:after="${level <= 2 ? 140 : 80}" w:line="${theme.lineSpacing}" w:lineRule="${theme.lineSpacingRule}"/>
           ${jc}
           ${bottomBorder}
         </w:pPr>
         ${renderInlineNodes(el.childNodes, {
           bold: true,
           color: headingColor,
-          fontAscii: theme.fontHeading || theme.fontAscii,
-          fontEastAsia: theme.fontHeading || theme.fontEastAsia,
+          fontAscii: theme.fontHeadingAscii,
+          fontEastAsia: headingFontEastAsia,
         })}
       </w:p>`;
     }
@@ -514,7 +529,7 @@ export function generateDocxBytes(
         return `<w:p>
           <w:pPr>
             <w:keepNext/>
-            <w:spacing w:before="200" w:after="80" w:line="288" w:lineRule="auto"/>
+            <w:spacing w:before="200" w:after="80" w:line="${theme.lineSpacing}" w:lineRule="${theme.lineSpacingRule}"/>
             ${jc}
           </w:pPr>
           ${renderRun(rawText, { bold: true, color: theme.primaryHeadingColor })}
@@ -528,7 +543,7 @@ export function generateDocxBytes(
         return `<w:p>
           <w:pPr>
             ${indentXml}
-            <w:spacing w:before="40" w:after="120" w:line="288" w:lineRule="auto"/>
+            <w:spacing w:before="${theme.spaceBeforeParagraph}" w:after="${theme.spaceAfterParagraph}" w:line="${theme.lineSpacing}" w:lineRule="${theme.lineSpacingRule}"/>
             ${jc}
           </w:pPr>
           ${renderInlineNodes(el.childNodes)}
@@ -540,7 +555,7 @@ export function generateDocxBytes(
           (seg, idx) => `<w:p>
           <w:pPr>
             ${indentXml}
-            <w:spacing w:before="20" w:after="${idx === segments.length - 1 ? 120 : 60}" w:line="288" w:lineRule="auto"/>
+            <w:spacing w:before="${idx === 0 ? theme.spaceBeforeParagraph : 0}" w:after="${idx === segments.length - 1 ? theme.spaceAfterParagraph : 40}" w:line="${theme.lineSpacing}" w:lineRule="${theme.lineSpacingRule}"/>
             ${jc}
           </w:pPr>
           ${renderInlineNodes(seg)}
@@ -560,23 +575,23 @@ export function generateDocxBytes(
       if (calloutMatch) {
         const type = calloutMatch[1].toUpperCase();
         if (type === 'NOTE') {
-          borderColor = '3B82F6';
-          bgFill = 'EFF6FF';
+          borderColor = '0284C7';
+          bgFill = 'F0F9FF';
           badgeTitle = 'ℹ️ 说明 (NOTE)：';
         } else if (type === 'TIP') {
-          borderColor = '10B981';
+          borderColor = '059669';
           bgFill = 'ECFDF5';
           badgeTitle = '💡 技巧 (TIP)：';
         } else if (type === 'WARNING') {
-          borderColor = 'F59E0B';
+          borderColor = 'D97706';
           bgFill = 'FFFBEB';
           badgeTitle = '⚠️ 警告 (WARNING)：';
         } else if (type === 'IMPORTANT') {
-          borderColor = '8B5CF6';
+          borderColor = '7C3AED';
           bgFill = 'F5F3FF';
           badgeTitle = '🔔 重要 (IMPORTANT)：';
         } else if (type === 'CAUTION') {
-          borderColor = 'EF4444';
+          borderColor = 'DC2626';
           bgFill = 'FEF2F2';
           badgeTitle = '🚨 危险 (CAUTION)：';
         }
@@ -586,7 +601,7 @@ export function generateDocxBytes(
 
       return `<w:p>
         <w:pPr>
-          <w:spacing w:before="120" w:after="120" w:line="288" w:lineRule="auto"/>
+          <w:spacing w:before="120" w:after="120" w:line="${theme.lineSpacing}" w:lineRule="${theme.lineSpacingRule}"/>
           <w:ind w:left="360" w:right="240"/>
           <w:jc w:val="both"/>
           <w:pBdr>
@@ -640,12 +655,15 @@ export function generateDocxBytes(
       const rows = Array.from(el.querySelectorAll('tr'));
       if (rows.length === 0) return '';
 
+      const isThreeLine = theme.tableIsThreeLine || false;
       let rowsXml = '';
+
       rows.forEach((tr, rowIdx) => {
         const cells = Array.from(tr.children).filter(
           (c) => c.tagName.toLowerCase() === 'th' || c.tagName.toLowerCase() === 'td'
         );
         const isHeaderRow = rowIdx === 0 || cells.some((c) => c.tagName.toLowerCase() === 'th');
+        const isLastRow = rowIdx === rows.length - 1;
 
         let cellsXml = '';
         cells.forEach((cell) => {
@@ -656,19 +674,41 @@ export function generateDocxBytes(
             ? `<w:shd w:val="clear" w:color="auto" w:fill="${theme.tableHeaderBg}"/>`
             : rowIdx % 2 === 1
             ? '<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>'
-            : '<w:shd w:val="clear" w:color="auto" w:fill="FAFAFA"/>';
+            : `<w:shd w:val="clear" w:color="auto" w:fill="${isThreeLine ? 'FFFFFF' : 'FAFAFA'}"/>`;
 
-          const bottomBdr = isHeaderRow
-            ? `<w:bottom w:val="single" w:sz="12" w:space="0" w:color="${theme.tableBorderColor}"/>`
-            : `<w:bottom w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>`;
+          // Professional Border Strategy
+          let topBdr = '<w:top w:val="none"/>';
+          let bottomBdr = '<w:bottom w:val="none"/>';
+          let leftBdr = '<w:left w:val="none"/>';
+          let rightBdr = '<w:right w:val="none"/>';
+
+          if (isThreeLine) {
+            // ISO/IEEE Standard Three-line Table: No vertical borders, top/bottom thick navy, header bottom medium navy
+            if (isHeaderRow) {
+              topBdr = `<w:top w:val="single" w:sz="${theme.tableTopBorderSz || 12}" w:space="0" w:color="${theme.tableBorderColor}"/>`;
+              bottomBdr = `<w:bottom w:val="single" w:sz="6" w:space="0" w:color="${theme.tableBorderColor}"/>`;
+            } else if (isLastRow) {
+              bottomBdr = `<w:bottom w:val="single" w:sz="${theme.tableBottomBorderSz || 12}" w:space="0" w:color="${theme.tableBorderColor}"/>`;
+            } else {
+              bottomBdr = `<w:bottom w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>`;
+            }
+          } else {
+            // Full Grid Table (Formal and Report)
+            topBdr = `<w:top w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>`;
+            bottomBdr = isHeaderRow
+              ? `<w:bottom w:val="single" w:sz="12" w:space="0" w:color="${theme.tableBorderColor}"/>`
+              : `<w:bottom w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>`;
+            leftBdr = `<w:left w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>`;
+            rightBdr = `<w:right w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>`;
+          }
 
           cellsXml += `<w:tc>
             <w:tcPr>
               <w:tcBorders>
-                <w:top w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
+                ${topBdr}
                 ${bottomBdr}
-                <w:left w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
-                <w:right w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
+                ${leftBdr}
+                ${rightBdr}
               </w:tcBorders>
               ${shd}
               <w:tcMar>
@@ -681,7 +721,7 @@ export function generateDocxBytes(
             </w:tcPr>
             <w:p>
               <w:pPr>
-                <w:spacing w:before="20" w:after="20" w:line="280" w:lineRule="auto"/>
+                <w:spacing w:before="20" w:after="20" w:line="260" w:lineRule="auto"/>
                 ${jc}
               </w:pPr>
               ${renderInlineNodes(cellEl.childNodes, {
@@ -695,17 +735,28 @@ export function generateDocxBytes(
         rowsXml += `<w:tr>${isHeaderRow ? '<w:trPr><w:tblHeader/></w:trPr>' : ''}${cellsXml}</w:tr>`;
       });
 
-      return `<w:tbl>
-        <w:tblPr>
-          <w:tblW w:w="5000" w:type="pct"/>
-          <w:tblBorders>
+      const tblBordersXml = isThreeLine
+        ? `<w:tblBorders>
+            <w:top w:val="single" w:sz="${theme.tableTopBorderSz || 12}" w:space="0" w:color="${theme.tableBorderColor}"/>
+            <w:bottom w:val="single" w:sz="${theme.tableBottomBorderSz || 12}" w:space="0" w:color="${theme.tableBorderColor}"/>
+            <w:left w:val="none"/>
+            <w:right w:val="none"/>
+            <w:insideH w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
+            <w:insideV w:val="none"/>
+          </w:tblBorders>`
+        : `<w:tblBorders>
             <w:top w:val="single" w:sz="8" w:space="0" w:color="${theme.tableBorderColor}"/>
             <w:bottom w:val="single" w:sz="8" w:space="0" w:color="${theme.tableBorderColor}"/>
             <w:left w:val="single" w:sz="6" w:space="0" w:color="${theme.tableBorderColor}"/>
             <w:right w:val="single" w:sz="6" w:space="0" w:color="${theme.tableBorderColor}"/>
             <w:insideH w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
             <w:insideV w:val="single" w:sz="4" w:space="0" w:color="${theme.tableInnerBorderColor}"/>
-          </w:tblBorders>
+          </w:tblBorders>`;
+
+      return `<w:tbl>
+        <w:tblPr>
+          <w:tblW w:w="5000" w:type="pct"/>
+          ${tblBordersXml}
           <w:tblLayout w:type="autofit"/>
         </w:tblPr>
         ${rowsXml}
@@ -842,8 +893,7 @@ export function generateDocxBytes(
     <w:rPrDefault>
       <w:rPr>
         <w:rFonts w:ascii="${theme.fontAscii}" w:hAnsi="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}" w:cs="${theme.fontAscii}"/>
-        <w:sz w:val="21"/>
-        <w:szCs w:val="21"/>
+        <w:sz w:val="${theme.bodySize}"/><w:szCs w:val="${theme.bodySize}"/>
         <w:color w:val="${theme.bodyColor}"/>
         <w:lang w:val="en-US" w:eastAsia="zh-CN"/>
       </w:rPr>
@@ -878,7 +928,7 @@ export function generateDocxBytes(
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="0"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="38"/><w:szCs w:val="38"/><w:color w:val="${theme.primaryHeadingColor}"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="${theme.fontHeadingAscii}" w:eastAsia="${theme.id === 'formal' ? 'SimHei' : theme.fontHeadingEastAsia}"/><w:b/><w:bCs/><w:sz w:val="${theme.h1Size}"/><w:szCs w:val="${theme.h1Size}"/><w:color w:val="${theme.primaryHeadingColor}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading2">
     <w:name w:val="heading 2"/>
@@ -886,7 +936,7 @@ export function generateDocxBytes(
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="1"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="30"/><w:szCs w:val="30"/><w:color w:val="${theme.secondaryHeadingColor}"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="${theme.fontHeadingAscii}" w:eastAsia="${theme.id === 'formal' ? 'KaiTi' : theme.fontHeadingEastAsia}"/><w:b/><w:bCs/><w:sz w:val="${theme.h2Size}"/><w:szCs w:val="${theme.h2Size}"/><w:color w:val="${theme.secondaryHeadingColor}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading3">
     <w:name w:val="heading 3"/>
@@ -894,7 +944,7 @@ export function generateDocxBytes(
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="2"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="25"/><w:szCs w:val="25"/><w:color w:val="${theme.secondaryHeadingColor}"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="${theme.fontHeadingAscii}" w:eastAsia="${theme.id === 'formal' ? 'FangSong' : theme.fontHeadingEastAsia}"/><w:b/><w:bCs/><w:sz w:val="${theme.h3Size}"/><w:szCs w:val="${theme.h3Size}"/><w:color w:val="${theme.secondaryHeadingColor}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading4">
     <w:name w:val="heading 4"/>
@@ -902,19 +952,38 @@ export function generateDocxBytes(
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="3"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="22"/><w:szCs w:val="22"/><w:color w:val="${theme.bodyColor}"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="${theme.fontHeadingAscii}" w:eastAsia="${theme.fontHeadingEastAsia}"/><w:b/><w:bCs/><w:sz w:val="${theme.h4Size}"/><w:szCs w:val="${theme.h4Size}"/><w:color w:val="${theme.bodyColor}"/></w:rPr>
   </w:style>
 </w:styles>`;
+
+  // A4 content width = 11906 - left - right
+  const contentWidthDxa = 11906 - theme.margins.left - theme.margins.right;
 
   const headerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:p>
     <w:pPr>
-      <w:jc w:val="right"/>
+      <w:tabs>
+        <w:tab w:val="right" w:pos="${contentWidthDxa}"/>
+      </w:tabs>
       <w:pBdr>
-        <w:bottom w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/>
+        <w:bottom w:val="single" w:sz="4" w:space="4" w:color="CBD5E1"/>
       </w:pBdr>
     </w:pPr>
+    ${
+      theme.headerLeftText
+        ? `<w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+        <w:sz w:val="17"/><w:szCs w:val="17"/>
+        <w:b/><w:bCs/>
+        <w:color w:val="${theme.accentColor}"/>
+      </w:rPr>
+      <w:t xml:space="preserve">${escapeXml(theme.headerLeftText)}</w:t>
+    </w:r>`
+        : ''
+    }
+    <w:r><w:tab/></w:r>
     <w:r>
       <w:rPr>
         <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
@@ -926,13 +995,36 @@ export function generateDocxBytes(
   </w:p>
 </w:hdr>`;
 
-  const footerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:p>
-    <w:pPr>
-      <w:jc w:val="center"/>
-    </w:pPr>
+  // Footer: GB/T 9704-2012 Article 7.5 requires "— PAGE —" in SimSun; other themes use "第 X 页 / 共 Y 页"
+  const footerContentXml =
+    theme.footerFormat === 'gb_formal'
+      ? `<w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="SimSun" w:hAnsi="SimSun" w:eastAsia="SimSun"/>
+        <w:sz w:val="28"/><w:szCs w:val="28"/>
+        <w:color w:val="000000"/>
+      </w:rPr>
+      <w:t xml:space="preserve">— </w:t>
+    </w:r>
+    <w:fldSimple w:instr="PAGE">
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="SimSun" w:hAnsi="SimSun" w:eastAsia="SimSun"/>
+          <w:sz w:val="28"/><w:szCs w:val="28"/>
+          <w:color w:val="000000"/>
+        </w:rPr>
+        <w:t>1</w:t>
+      </w:r>
+    </w:fldSimple>
     <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="SimSun" w:hAnsi="SimSun" w:eastAsia="SimSun"/>
+        <w:sz w:val="28"/><w:szCs w:val="28"/>
+        <w:color w:val="000000"/>
+      </w:rPr>
+      <w:t xml:space="preserve"> —</w:t>
+    </w:r>`
+      : `<w:r>
       <w:rPr>
         <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
         <w:sz w:val="18"/><w:szCs w:val="18"/>
@@ -975,7 +1067,15 @@ export function generateDocxBytes(
         <w:color w:val="94A3B8"/>
       </w:rPr>
       <w:t xml:space="preserve"> 页</w:t>
-    </w:r>
+    </w:r>`;
+
+  const footerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p>
+    <w:pPr>
+      <w:jc w:val="center"/>
+    </w:pPr>
+    ${footerContentXml}
   </w:p>
 </w:ftr>`;
 
@@ -994,7 +1094,7 @@ export function generateDocxBytes(
       ${headerRefXml}
       ${footerRefXml}
       <w:pgSz w:w="11906" w:h="16838"/>
-      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>
+      <w:pgMar w:top="${theme.margins.top}" w:bottom="${theme.margins.bottom}" w:left="${theme.margins.left}" w:right="${theme.margins.right}" w:header="${theme.margins.header}" w:footer="${theme.margins.footer}" w:gutter="0"/>
     </w:sectPr>
   </w:body>
 </w:document>`;
@@ -1021,7 +1121,7 @@ export async function exportMarkdownToDocx(
   markdown: string,
   fileName?: string,
   showToast?: (msg: string, level?: 'info' | 'warning' | 'error') => void,
-  themeId: ExportThemeId = 'report'
+  themeId: ExportThemeId = 'whitepaper'
 ): Promise<void> {
   try {
     const baseName = fileName
@@ -1037,7 +1137,7 @@ export async function exportMarkdownToDocx(
       extensions: ['docx'],
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       showToast,
-      successLabel: ' Word (.docx) 文档',
+      successLabel: ' Word 文档',
     });
   } catch (error) {
     console.error('DOCX export error:', error);

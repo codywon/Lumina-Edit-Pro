@@ -5,12 +5,20 @@ import { saveExportedBytes } from './exportSave';
  * Filter function to skip non-printable or UI overlay nodes during rasterization.
  */
 function imageExportFilter(node: HTMLElement): boolean {
-  if (!node || !node.classList) return true;
+  if (!node || (node as any).nodeType !== 1) return true;
+  if (typeof node.getAttribute === 'function' && node.getAttribute('role') === 'dialog') {
+    return false;
+  }
+  const className =
+    typeof node.className === 'string'
+      ? node.className
+      : typeof (node.className as any)?.baseVal === 'string'
+      ? (node.className as any).baseVal
+      : '';
   if (
-    node.classList.contains('print-hide') ||
-    node.classList.contains('ai-panel') ||
-    node.classList.contains('sidebar') ||
-    node.getAttribute('role') === 'dialog'
+    className.includes('print-hide') ||
+    className.includes('ai-panel') ||
+    className.includes('sidebar')
   ) {
     return false;
   }

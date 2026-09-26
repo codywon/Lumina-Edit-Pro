@@ -160,6 +160,15 @@ function SidebarRightComponent({
   const [insertingMessageId, setInsertingMessageId] = useState<string | null>(null);
   const [insertionProgressText, setInsertionProgressText] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const insertTimerRef = useRef<number | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (insertTimerRef.current !== null) clearTimeout(insertTimerRef.current);
+      if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
   const [imagePreview, setImagePreview] = useState<{ src: string; alt: string } | null>(null);
   const [aiFontSize, setAiFontSize] = useState<number>(() => {
     try {
@@ -593,7 +602,10 @@ function SidebarRightComponent({
       showToast?.(friendlyMessage, 'error');
     } finally {
       setInsertingMessageId(null);
-      window.setTimeout(() => setInsertionProgressText(null), 800);
+      if (insertTimerRef.current !== null) clearTimeout(insertTimerRef.current);
+      if (typeof window !== 'undefined') {
+        insertTimerRef.current = window.setTimeout(() => setInsertionProgressText(null), 800);
+      }
     }
   };
 
@@ -601,7 +613,10 @@ function SidebarRightComponent({
     navigator.clipboard?.writeText(msg.content).then(() => {
       setCopiedMessageId(msg.id);
       showToast?.('已复制回复内容到剪贴板', 'info');
-      setTimeout(() => setCopiedMessageId(null), 2000);
+      if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+      if (typeof window !== 'undefined') {
+        copyTimerRef.current = window.setTimeout(() => setCopiedMessageId(null), 2000);
+      }
     });
   };
 

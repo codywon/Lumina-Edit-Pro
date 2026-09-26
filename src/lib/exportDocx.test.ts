@@ -98,6 +98,40 @@ telemetry_profile：0=全量上报（默认），1=精简上报。
     expect(whitepaperDecoded).toContain('003366');
   });
 
+  it('renders a professional Table of Contents when [TOC] marker is present', () => {
+    const md = `# 第一章 系统概述\n\n正文 1\n\n[TOC]\n\n## 1.1 架构设计\n\n正文 2\n\n### 1.1.1 核心服务\n\n正文 3`;
+    const bytes = generateDocxBytes(md, 'toc.docx');
+    const decoded = new TextDecoder().decode(bytes);
+
+    expect(decoded).toContain('目  录');
+    expect(decoded).toContain('第一章 系统概述');
+    expect(decoded).toContain('1.1 架构设计');
+    expect(decoded).toContain('1.1.1 核心服务');
+  });
+
+  it('extracts YAML frontmatter and renders a clean executive metadata table in Word export', () => {
+    const md = `---
+title: 酒店雷达系统对接接口文档
+author: codywon
+version: v1.0.0
+status: 评审中
+tags: [酒店, 毫米波雷达]
+---
+
+# 正文标题
+
+这里是正文说明。`;
+
+    const bytes = generateDocxBytes(md, 'doc.docx');
+    const decoded = new TextDecoder().decode(bytes);
+
+    expect(decoded).toContain('酒店雷达系统对接接口文档');
+    expect(decoded).toContain('codywon');
+    expect(decoded).toContain('v1.0.0');
+    expect(decoded).toContain('评审中');
+    expect(decoded).toContain('酒店, 毫米波雷达');
+  });
+
   it('preserves code blocks and inline codes with tildes without corrupting them into html entities', () => {
     const md = `# 代码测试
 

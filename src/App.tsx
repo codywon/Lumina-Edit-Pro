@@ -21,6 +21,10 @@ import { cn } from './lib/utils';
 import CodeBlockComponent from './components/CodeBlockComponent';
 import ResizableImageComponent from './components/ResizableImageComponent';
 import { CalloutExtension } from './lib/calloutExtension';
+import { TocExtension } from './lib/tocExtension';
+import { AlertTriangle } from 'lucide-react';
+import { isTauriRuntime } from './services/native/environment';
+import { getNativeFileMtime, readNativeFile } from './services/workspace/client';
 
 import Header from './components/Header';
 import SidebarLeft from './components/SidebarLeft';
@@ -32,6 +36,8 @@ import AICenterModal from './components/AICenterModal';
 import AboutModal from './components/AboutModal';
 import UserManualModal from './components/UserManualModal';
 import ExportModal from './components/ExportModal';
+import TimelineModal from './components/TimelineModal';
+import { saveSnapshot } from './lib/timeline';
 import QuickOpenModal from './components/QuickOpenModal';
 import FindReplaceModal from './components/FindReplaceModal';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -116,14 +122,19 @@ function sanitizeFileName(name: string) {
 
 
 function getImageFileName(file: File) {
-  const safeName = sanitizeFileName(file.name || '');
+  const rawName = file.name || '';
+  const safeName = sanitizeFileName(rawName);
   const extension = getImageExtension(file) || '.png';
 
-  if (safeName) {
-    return safeName.includes('.') ? safeName : `${safeName}${extension}`;
+  const isGeneric = !safeName || /^(image|blob|clipboard|screenshot)(\.[^.]+)?$/i.test(safeName);
+  if (isGeneric) {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const timestamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    return `image_${timestamp}${extension}`;
   }
 
-  return `image-${Date.now()}${extension}`;
+  return safeName.includes('.') ? safeName : `${safeName}${extension}`;
 }
 
 function getImageExtensionFromMimeType(mimeType: string) {
@@ -524,6 +535,7 @@ function AppContent() {
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [isExportDocxModalOpen, setIsExportDocxModalOpen] = useState(false);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false);
   const [isQuickOpenVisible, setIsQuickOpenVisible] = useState(false);
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -879,6 +891,7 @@ function AppContent() {
     TaskList,
     TaskItem.configure({ nested: true }),
     CalloutExtension,
+    TocExtension,
   ], []);
 
   const ensureWritableImageTarget = (options: { showError?: boolean } = {}) => {
@@ -989,9 +1002,16 @@ function AppContent() {
 
   const saveImageToWorkspace = async (file: File, options: { showError?: boolean } = {}) => {
     const { showError = true } = options;
-    const target = ensureWritableImageTarget({ showError });
+    const target = ensureWritableImageTarget({ showError: false });
     if (!target) {
-      return null;
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          showToast('未保存的新建文档已临时内嵌截图；保存文件后新截图将自动归档至 .assets 目录', 'info');
+          resolve(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      });
     }
 
     try {
@@ -1001,6 +1021,7 @@ function AppContent() {
       if (target.kind === 'native-single-file') {
         const requestedPath = `${target.assetsPath}/${initialName}`;
         const result = await writeNativeFileAsset(target.filePath, requestedPath, bytes);
+        showToast(`截图已自动归档至：${result.relativePath}`, 'info');
         return result.relativePath;
       }
 
@@ -1011,6 +1032,7 @@ function AppContent() {
         const assetPath = [...assetsSegments, finalName].join('/');
         await writeNativeWorkspaceBinary(workspaceDirectoryHandle.workspaceId, assetPath, bytes);
         await refreshWorkspace(workspaceDirectoryHandle);
+        showToast(`截图已自动归档至：${target.assetsPath}/${finalName}`, 'info');
         return `${target.assetsPath}/${finalName}`;
       }
 
@@ -1022,6 +1044,7 @@ function AppContent() {
       await writable.write(file);
       await writable.close();
 
+      showToast(`截图已自动归档至：${target.assetsPath}/${finalName}`, 'info');
       return `${target.assetsPath}/${finalName}`;
     } catch (error) {
       console.error('Error saving image:', error);
@@ -1778,6 +1801,13 @@ function AppContent() {
         if (currentWorkspaceFilePath) {
           workspaceContentCacheRef.current.set(currentWorkspaceFilePath, currentContent);
         }
+        const docKey = currentWorkspaceFilePath || (currentFileHandle as any)?.path || (currentFileHandle as any)?.name || 'current_doc';
+        saveSnapshot(docKey, currentContent, 'save');
+        if ((currentFileHandle as any)?.path) {
+          getNativeFileMtime((currentFileHandle as any).path).then((mtime) => {
+            lastKnownMtimeRef.current = mtime;
+          }).catch(() => {});
+        }
         showToast('已保存到磁盘');
       } catch (error) {
         console.error('Error saving file:', error);
@@ -2435,9 +2465,88 @@ function AppContent() {
     });
   };
 
+  const lastKnownMtimeRef = useRef<number>(0);
+  const [externalModifiedPath, setExternalModifiedPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    const currentHandle = activeFileHandle;
+    const filePath = (currentHandle as any)?.path;
+    if (!filePath) {
+      setExternalModifiedPath(null);
+      return;
+    }
+
+    getNativeFileMtime(filePath).then((mtime) => {
+      lastKnownMtimeRef.current = mtime;
+    }).catch(() => {});
+
+    const checkExternalChange = async () => {
+      try {
+        const mtime = await getNativeFileMtime(filePath);
+        if (lastKnownMtimeRef.current > 0 && mtime > lastKnownMtimeRef.current) {
+          const diskContent = await readNativeFile(filePath);
+          if (diskContent !== contentRef.current) {
+            setExternalModifiedPath(filePath);
+          } else {
+            lastKnownMtimeRef.current = mtime;
+          }
+        }
+      } catch {
+        // file may be momentarily locked
+      }
+    };
+
+    const interval = setInterval(checkExternalChange, 3000);
+    const onFocus = () => { void checkExternalChange(); };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [activeFileHandle]);
+
+  const handleReloadExternalFile = async () => {
+    if (!externalModifiedPath) return;
+    try {
+      const diskContent = await readNativeFile(externalModifiedPath);
+      contentRef.current = diskContent;
+      setContent(diskContent);
+      editor?.commands?.setContent(diskContent);
+      const mtime = await getNativeFileMtime(externalModifiedPath);
+      lastKnownMtimeRef.current = mtime;
+      lastSavedContentRef.current = diskContent;
+      setExternalModifiedPath(null);
+      showToast('已从磁盘重新载入外部修改的内容', 'info');
+    } catch (err) {
+      showErrorToast('重新载入文件失败，请检查文件权限');
+    }
+  };
+
+  const handleDismissExternalFile = async () => {
+    if (!externalModifiedPath) return;
+    try {
+      const mtime = await getNativeFileMtime(externalModifiedPath);
+      lastKnownMtimeRef.current = mtime;
+    } catch {}
+    setExternalModifiedPath(null);
+    showToast('已保留当前编辑器中的内容', 'info');
+  };
+
   const workspaceNotice = workspaceName && !workspaceWritable
     ? '当前工作区为只读模式，仅支持浏览和打开已有 Markdown 文件，不支持新建文件或文件夹。'
     : null;
+
+  const getActiveDocKey = () => {
+    return activeWorkspaceFilePathRef.current || (activeFileHandleRef.current as any)?.path || (activeFileHandleRef.current as any)?.name || 'current_doc';
+  };
+
+  const handleRestoreFromTimeline = (restoredContent: string) => {
+    contentRef.current = restoredContent;
+    setContent(restoredContent);
+    editor?.commands?.setContent(restoredContent);
+  };
 
   return (
     <div className={cn(
@@ -2445,6 +2554,28 @@ function AppContent() {
       settings.focusMode && "focus-mode",
       settings.uiDensity === 'compact' && "density-compact"
     )}>
+      {externalModifiedPath && (
+        <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between text-xs shadow-md z-[100] shrink-0 select-none">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={15} />
+            <span>检测到当前打开的文件已在外部被修改，是否重新载入磁盘最新内容？</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReloadExternalFile}
+              className="px-2.5 py-1 rounded bg-white text-amber-900 font-bold hover:bg-amber-50 transition-colors"
+            >
+              重新载入
+            </button>
+            <button
+              onClick={handleDismissExternalFile}
+              className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white transition-colors"
+            >
+              保留当前编辑
+            </button>
+          </div>
+        </div>
+      )}
       {!settings.focusMode && (
         <Header
           viewMode={viewMode}
@@ -2473,6 +2604,7 @@ function AppContent() {
           onOpenReplace={() => setIsFindReplaceOpen(true)}
           onOpenManual={() => setIsManualOpen(true)}
           onOpenExportDocx={() => setIsExportDocxModalOpen(true)}
+          onOpenTimeline={() => setIsTimelineOpen(true)}
           onToggleFullscreen={handleToggleFullscreen}
           onToggleFocusMode={handleToggleFocusMode}
           onWindowMinimize={handleWindowMinimize}
@@ -2605,6 +2737,7 @@ function AppContent() {
           scrollToPos={scrollToPos}
           editor={editor}
           onInsertImage={handleInsertImageFromPicker}
+          onSaveImageFile={saveImageToWorkspace}
           onSelectionChange={setSelectedText}
           documentId={documentId}
           showToast={showToast}
@@ -2656,7 +2789,13 @@ function AppContent() {
           </div>
         )}
       </div>
-      {!settings.focusMode && <Footer content={content} showToast={showToast} />}
+      {!settings.focusMode && (
+        <Footer
+          content={content}
+          showToast={showToast}
+          onOpenTimeline={() => setIsTimelineOpen(true)}
+        />
+      )}
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <AICenterModal isOpen={isAICenterOpen} onClose={() => setIsAICenterOpen(false)} />
@@ -2673,6 +2812,14 @@ function AppContent() {
         isOpen={isExportDocxModalOpen}
         onClose={() => setIsExportDocxModalOpen(false)}
         content={content}
+        showToast={showToast}
+      />
+      <TimelineModal
+        isOpen={isTimelineOpen}
+        onClose={() => setIsTimelineOpen(false)}
+        docKey={getActiveDocKey()}
+        currentContent={content}
+        onRestoreContent={handleRestoreFromTimeline}
         showToast={showToast}
       />
       <QuickOpenModal

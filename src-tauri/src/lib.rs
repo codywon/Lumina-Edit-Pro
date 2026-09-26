@@ -300,6 +300,18 @@ fn app_open_default_apps_settings() -> Result<(), String> {
 
 // Single File Commands
 #[tauri::command]
+fn file_mtime(payload: FilePathPayload) -> Result<u64, String> {
+    let metadata = fs::metadata(&payload.path).map_err(|e| e.to_string())?;
+    let mtime = metadata
+        .modified()
+        .map_err(|e| e.to_string())?
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis() as u64;
+    Ok(mtime)
+}
+
+#[tauri::command]
 fn file_read(payload: FilePathPayload) -> Result<String, String> {
     fs::read_to_string(&payload.path).map_err(|e| e.to_string())
 }
@@ -649,6 +661,7 @@ pub fn run() {
             app_get_cli_open_file,
             app_set_as_default_editor,
             app_open_default_apps_settings,
+            file_mtime,
             file_read,
             file_write,
             file_write_asset,

@@ -1,6 +1,7 @@
 import { marked } from 'marked';
 import { extractDocumentBaseName, saveExportedBytes } from './exportSave';
 import { EXPORT_THEMES, ExportThemeConfig, ExportThemeId } from './exportThemes';
+import { parseFrontmatter } from './frontmatter';
 
 /**
  * Pure TypeScript PKZIP Builder (Store method, 0 external dependencies)
@@ -190,7 +191,8 @@ export function generateDocxBytes(
   const theme: ExportThemeConfig = EXPORT_THEMES[opts.themeId || 'whitepaper'] || EXPORT_THEMES.whitepaper;
   const docTitle = opts.title || extractDocumentBaseName(markdown, 'Lumina Document');
 
-  const normalized = preprocessMarkdown(markdown);
+  const { frontmatter, body: contentWithoutFrontmatter } = parseFrontmatter(markdown);
+  const normalized = preprocessMarkdown(contentWithoutFrontmatter);
   const html = marked.parse(normalized, { async: false, gfm: true, breaks: true }) as string;
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
@@ -394,6 +396,8 @@ export function generateDocxBytes(
     return out;
   };
 
+  const contentWidthDxa = 11906 - theme.margins.left - theme.margins.right;
+
   const renderBlockElement = (el: HTMLElement): string => {
     const tag = el.tagName.toLowerCase();
 
@@ -458,6 +462,61 @@ export function generateDocxBytes(
     // Paragraph or Div
     if (tag === 'p' || tag === 'div') {
       const rawText = (el.textContent || '').trim();
+
+      // Table of Contents marker [TOC] or [toc]
+      if (/^\[(TOC|toc)\]$/i.test(rawText)) {
+        let tocXml = `<w:p>
+          <w:pPr>
+            <w:keepNext/>
+            <w:spacing w:before="240" w:after="120" w:line="${theme.lineSpacing}" w:lineRule="${theme.lineSpacingRule}"/>
+          </w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="${theme.fontHeadingAscii}" w:eastAsia="${theme.fontHeadingEastAsia}"/>
+              <w:b/><w:bCs/>
+              <w:sz w:val="${theme.h2Size}"/><w:szCs w:val="${theme.h2Size}"/>
+              <w:color w:val="${theme.primaryHeadingColor}"/>
+            </w:rPr>
+            <w:t xml:space="preserve">目  录</w:t>
+          </w:r>
+        </w:p>`;
+
+        const docHeadings = Array.from(root.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+        docHeadings.forEach((hEl, idx) => {
+          const hText = (hEl.textContent || '').trim();
+          const hLevel = parseInt(hEl.tagName.slice(1), 10) || 1;
+          const leftIndent = Math.max(0, (hLevel - 1) * 360);
+          tocXml += `<w:p>
+            <w:pPr>
+              <w:ind w:left="${leftIndent}"/>
+              <w:tabs>
+                <w:tab w:val="right" w:leader="dot" w:pos="${contentWidthDxa}"/>
+              </w:tabs>
+              <w:spacing w:before="30" w:after="30" w:line="260" w:lineRule="auto"/>
+            </w:pPr>
+            <w:r>
+              <w:rPr>
+                <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+                <w:sz w:val="${theme.bodySize}"/><w:szCs w:val="${theme.bodySize}"/>
+                <w:color w:val="${theme.bodyColor}"/>
+              </w:rPr>
+              <w:t xml:space="preserve">${escapeXml(hText)}</w:t>
+            </w:r>
+            <w:r><w:tab/></w:r>
+            <w:r>
+              <w:rPr>
+                <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
+                <w:sz w:val="${theme.bodySize}"/><w:szCs w:val="${theme.bodySize}"/>
+                <w:color w:val="64748B"/>
+              </w:rPr>
+              <w:t>${idx + 1}</w:t>
+            </w:r>
+          </w:p>`;
+        });
+
+        return tocXml + `<w:p><w:pPr><w:spacing w:before="120" w:after="160"/><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="${theme.tableBorderColor}"/></w:pBdr></w:pPr></w:p>`;
+      }
+
       const align = el.getAttribute('align') || el.style.textAlign || '';
       const jc =
         align === 'center'
@@ -718,6 +777,65 @@ export function generateDocxBytes(
   };
 
   let bodyXml = '';
+
+  if (frontmatter) {
+    const metaEntries = Object.entries(frontmatter).filter(
+      ([, val]) => val !== undefined && val !== null && val !== ''
+    );
+    if (metaEntries.length > 0) {
+      let metaRowsXml = '';
+      metaEntries.forEach(([key, val], idx) => {
+        const displayVal = Array.isArray(val) ? val.join(', ') : String(val);
+        const shd =
+          idx % 2 === 0
+            ? '<w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/>'
+            : '<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>';
+        metaRowsXml += `<w:tr>
+          <w:tc>
+            <w:tcPr>
+              <w:tcW w:w="1400" w:type="pct"/>
+              <w:tcBorders>
+                <w:top w:val="single" w:sz="4" w:color="${theme.tableInnerBorderColor}"/>
+                <w:bottom w:val="single" w:sz="4" w:color="${theme.tableInnerBorderColor}"/>
+                <w:left w:val="none"/><w:right w:val="none"/>
+              </w:tcBorders>
+              ${shd}
+              <w:tcMar><w:top w:w="60" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>
+            </w:tcPr>
+            <w:p><w:pPr><w:spacing w:before="10" w:after="10"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="64748B"/></w:rPr><w:t xml:space="preserve">${escapeXml(key)}</w:t></w:r></w:p>
+          </w:tc>
+          <w:tc>
+            <w:tcPr>
+              <w:tcW w:w="3600" w:type="pct"/>
+              <w:tcBorders>
+                <w:top w:val="single" w:sz="4" w:color="${theme.tableInnerBorderColor}"/>
+                <w:bottom w:val="single" w:sz="4" w:color="${theme.tableInnerBorderColor}"/>
+                <w:left w:val="none"/><w:right w:val="none"/>
+              </w:tcBorders>
+              ${shd}
+              <w:tcMar><w:top w:w="60" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>
+            </w:tcPr>
+            <w:p><w:pPr><w:spacing w:before="10" w:after="10"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="${theme.bodyColor}"/></w:rPr><w:t xml:space="preserve">${escapeXml(displayVal)}</w:t></w:r></w:p>
+          </w:tc>
+        </w:tr>`;
+      });
+
+      bodyXml += `<w:tbl>
+        <w:tblPr>
+          <w:tblW w:w="5000" w:type="pct"/>
+          <w:tblBorders>
+            <w:top w:val="single" w:sz="8" w:color="${theme.tableBorderColor}"/>
+            <w:bottom w:val="single" w:sz="8" w:color="${theme.tableBorderColor}"/>
+            <w:left w:val="none"/><w:right w:val="none"/>
+            <w:insideH w:val="single" w:sz="4" w:color="${theme.tableInnerBorderColor}"/>
+            <w:insideV w:val="none"/>
+          </w:tblBorders>
+        </w:tblPr>
+        ${metaRowsXml}
+      </w:tbl><w:p><w:pPr><w:spacing w:before="40" w:after="140"/></w:pPr></w:p>`;
+    }
+  }
+
   const rootChildren = Array.from(root.children);
   rootChildren.forEach((child) => {
     bodyXml += renderBlockElement(child as HTMLElement);
@@ -896,9 +1014,6 @@ export function generateDocxBytes(
     <w:rPr><w:rFonts w:ascii="${theme.fontHeadingAscii}" w:eastAsia="${theme.fontHeadingEastAsia}"/><w:b/><w:bCs/><w:sz w:val="${theme.h4Size}"/><w:szCs w:val="${theme.h4Size}"/><w:color w:val="${theme.bodyColor}"/></w:rPr>
   </w:style>
 </w:styles>`;
-
-  // A4 content width = 11906 - left - right
-  const contentWidthDxa = 11906 - theme.margins.left - theme.margins.right;
 
   const headerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

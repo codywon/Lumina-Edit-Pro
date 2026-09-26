@@ -25,6 +25,12 @@ export async function readNativeFile(path: string): Promise<string> {
   return await invoke<string>('file_read', { payload: { path } });
 }
 
+export async function getNativeFileMtime(path: string): Promise<number> {
+  assertTauriRuntime();
+  const invoke = getNativeInvoke();
+  return await invoke<number>('file_mtime', { payload: { path } });
+}
+
 export async function writeNativeFile(path: string, content: string): Promise<void> {
   assertTauriRuntime();
   const invoke = getNativeInvoke();

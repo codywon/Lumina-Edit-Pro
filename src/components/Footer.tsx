@@ -1,7 +1,15 @@
 import React, { useMemo } from 'react';
-import { Type, Clock } from 'lucide-react';
+import { Type, Clock, History } from 'lucide-react';
 
-function FooterComponent({ content, showToast }: { content: string, showToast: (msg: string, level?: 'info' | 'warning' | 'error') => void }) {
+function FooterComponent({
+  content,
+  showToast,
+  onOpenTimeline
+}: {
+  content: string;
+  showToast: (msg: string, level?: 'info' | 'warning' | 'error') => void;
+  onOpenTimeline?: () => void;
+}) {
   const { charCount, totalWords, readingTimeMin } = useMemo(() => {
     const charCount = content.length;
     let chineseChars = 0;
@@ -48,6 +56,16 @@ function FooterComponent({ content, showToast }: { content: string, showToast: (
       </div>
       
       <div className="flex items-center gap-4">
+        {onOpenTimeline && (
+          <button
+            onClick={onOpenTimeline}
+            className="flex items-center gap-1 hover:text-accent transition-colors"
+            title="打开本地历史版本时光机 (快照与恢复)"
+          >
+            <History size={12} />
+            <span>时光机</span>
+          </button>
+        )}
         <button onClick={() => showToast('Markdown 实时解析模式', 'info')} className="hover:text-slate-900 dark:hover:text-white transition-colors">Markdown</button>
       </div>
     </footer>

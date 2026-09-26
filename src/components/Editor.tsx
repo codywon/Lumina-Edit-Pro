@@ -17,6 +17,8 @@ import { cn } from '../lib/utils';
 import { formatPanguSpacing } from '../lib/pangu';
 import { useSettings } from '../contexts/SettingsContext';
 import CodeBlockComponent from './CodeBlockComponent';
+import FrontmatterCard from './FrontmatterCard';
+import { parseFrontmatter } from '../lib/frontmatter';
 import { useAI } from '../contexts/AIContext';
 import { buildPromptMessages } from '../lib/ai/promptBuilder';
 import { summarizeContextWithModel } from '../lib/ai/contextCompression';
@@ -129,15 +131,17 @@ interface EditorProps {
   scrollToPos?: { pos: number; timestamp: number } | null;
   editor: any;
   onInsertImage?: () => void | Promise<void>;
+  onSaveImageFile?: (file: File) => Promise<string | null>;
   onSelectionChange?: (text: string) => void;
   documentId?: string;
   showToast?: (msg: string, level?: 'info' | 'warning' | 'error') => void;
   onActiveHeadingChange?: (id: string | null) => void;
 }
 
-function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbarVisible, setIsToolbarVisible, searchQuery, searchVersion = 0, searchOptions = { caseSensitive: false, wholeWord: false }, searchNavigation, searchJump, onSearchMatchCount, onSearchActiveMatchIndex, onHeadingsChange, scrollToPos, editor, onInsertImage, onSelectionChange, showToast, onActiveHeadingChange }: EditorProps) {
+function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbarVisible, setIsToolbarVisible, searchQuery, searchVersion = 0, searchOptions = { caseSensitive: false, wholeWord: false }, searchNavigation, searchJump, onSearchMatchCount, onSearchActiveMatchIndex, onHeadingsChange, scrollToPos, editor, onInsertImage, onSaveImageFile, onSelectionChange, showToast, onActiveHeadingChange }: EditorProps) {
   const { settings, updateSettings } = useSettings();
   const { provider, chatPreferences, memory, updateMemory } = useAI();
+  const parsedFrontmatter = useMemo(() => parseFrontmatter(content), [content]);
   const [lineHeight, setLineHeight] = useState(settings.lineHeight);
   const [paragraphSpacing, setParagraphSpacing] = useState(settings.paragraphSpacing ?? 0.5);
   const editorContentClassName = settings.focusMode ? "w-full max-w-none" : "max-w-4xl mx-auto";
@@ -245,6 +249,26 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
     }
 
     return false;
+  };
+
+  const handleTextareaPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageItem = Array.from(items).find((item) => item.kind === 'file' && item.type.startsWith('image/'));
+    if (!imageItem) return;
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    const relativePath = await onSaveImageFile?.(file);
+    if (relativePath) {
+      const textarea = e.currentTarget;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const altText = file.name ? file.name.replace(/\.[^.]+$/, '') : 'image';
+      const markdownImage = `![${altText}](${relativePath})`;
+      const updated = content.slice(0, start) + markdownImage + content.slice(end);
+      setContent(updated);
+    }
   };
 
   // Sync local line height with settings
@@ -1501,11 +1525,18 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
             )}
           </div>
         )}
+        {parsedFrontmatter.frontmatter && (
+          <FrontmatterCard
+            data={parsedFrontmatter.frontmatter}
+            onEditInSource={() => setViewMode('source')}
+          />
+        )}
         {viewMode === 'source' ? (
           <textarea
             aria-label="Markdown 源码"
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            onPaste={handleTextareaPaste}
             className="w-full h-full min-h-[500px] bg-transparent border-none resize-none focus:ring-0 font-mono text-sm leading-relaxed text-slate-700 dark:text-slate-300 outline-none"
           />
         ) : viewMode === 'split' ? (
@@ -1516,6 +1547,7 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
                 aria-label="Markdown 源码"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                onPaste={handleTextareaPaste}
                 onScroll={(event) => {
                   if (viewMode !== 'split') {
                     return;

@@ -97,4 +97,25 @@ telemetry_profile：0=全量上报（默认），1=精简上报。
     const whitepaperDecoded = new TextDecoder().decode(whitepaperBytes);
     expect(whitepaperDecoded).toContain('003366');
   });
+
+  it('preserves code blocks and inline codes with tildes without corrupting them into html entities', () => {
+    const md = `# 代码测试
+
+\`\`\`bash
+cd ~
+tar -czf ~/backup.tar.gz .
+\`\`\`
+
+使用 \`~/config.json\` 配置。
+`;
+
+    const bytes = generateDocxBytes(md, 'code.docx');
+    const decoded = new TextDecoder().decode(bytes);
+
+    // Code block and inline code must contain literal ~ and NOT &#126;
+    expect(decoded).toContain('cd ~');
+    expect(decoded).toContain('~/backup.tar.gz');
+    expect(decoded).toContain('~/config.json');
+    expect(decoded).not.toContain('&#126;');
+  });
 });

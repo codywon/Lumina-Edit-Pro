@@ -8,9 +8,23 @@ export function extractDocumentBaseName(markdown: string, fallback = 'Lumina-Doc
   if (!markdown) return fallback;
   const lines = markdown.split(/\r?\n/);
   for (const line of lines) {
-    const match = line.trim().match(/^#{1,6}\s+(.+)$/);
-    if (match && match[1]) {
-      const cleaned = match[1]
+    const trimmed = line.trim();
+    // Markdown heading: # Title
+    const mdMatch = trimmed.match(/^#{1,6}\s+(.+)$/);
+    if (mdMatch && mdMatch[1]) {
+      const cleaned = mdMatch[1]
+        .replace(/[*_`~[\]()<>]/g, '')
+        .replace(/[\\/:*?"<>|]/g, '-')
+        .trim();
+      if (cleaned.length > 0) {
+        return cleaned.slice(0, 60);
+      }
+    }
+    // HTML heading: <h1>Title</h1>
+    const htmlMatch = trimmed.match(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/i);
+    if (htmlMatch && htmlMatch[1]) {
+      const cleaned = htmlMatch[1]
+        .replace(/<[^>]+>/g, '')
         .replace(/[*_`~[\]()<>]/g, '')
         .replace(/[\\/:*?"<>|]/g, '-')
         .trim();

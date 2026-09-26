@@ -351,12 +351,15 @@ async fn file_export_save(app: tauri::AppHandle, payload: FileExportSavePayload)
     let selected = rx.recv().map_err(|e| e.to_string())?;
     if let Some(path) = selected {
         let path_str = path.to_string();
-        let p = Path::new(&path_str);
+        let mut p = PathBuf::from(&path_str);
+        if p.extension().is_none() && !payload.extensions.is_empty() {
+            p.set_extension(&payload.extensions[0]);
+        }
         if let Some(parent) = p.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        fs::write(p, &payload.bytes).map_err(|e| e.to_string())?;
-        Ok(Some(path_str))
+        fs::write(&p, &payload.bytes).map_err(|e| e.to_string())?;
+        Ok(Some(p.to_string_lossy().to_string()))
     } else {
         Ok(None)
     }

@@ -126,19 +126,46 @@ export interface GenerateDocxOptions {
 }
 
 /**
- * Preprocess Markdown:
- * 1. Protect numeric range expressions like `1~1440` from being falsely parsed as strike-through (`<del>`).
- * 2. Normalize Unicode bullet points (`•`, `●`, `▪`, `◦`) to standard Markdown `- ` bullets.
+ * Preprocess Markdown safely:
+ * 1. Protect fenced code blocks (```...``` and ~~~...~~~) and inline code (`...`) from modification.
+ * 2. Protect intentional double-tilde strikethrough (~~deleted~~) in prose.
+ * 3. Convert single tilde (~) in prose (e.g. ranges like 1~1440, 0.10~2.00) to &#126; so Marked never treats them as strikethrough.
+ * 4. Normalize Unicode bullet points (•, ●, ▪, ◦) to standard Markdown - bullets.
  */
 function preprocessMarkdown(markdown: string): string {
-  const STRIKE_TOKEN = '___MARKDOWN_STRIKE_DOUBLE_TILDE___';
+  // Step 1: Protect fenced code blocks (```...``` and ~~~...~~~)
+  const codeBlocks: string[] = [];
   let text = markdown.replace(/\r\n/g, '\n');
+  text = text.replace(/(^|\n)(```|~~~)[^\n]*\n[\s\S]*?\n\2(\n|$)/g, (match) => {
+    const token = `___FENCED_CODE_BLOCK_${codeBlocks.length}___`;
+    codeBlocks.push(match);
+    return token;
+  });
 
+  // Step 2: Protect inline code (`...`)
+  const inlineCodes: string[] = [];
+  text = text.replace(/`[^`\n]+`/g, (match) => {
+    const token = `___INLINE_CODE_${inlineCodes.length}___`;
+    inlineCodes.push(match);
+    return token;
+  });
+
+  // Step 3: Now strictly within prose:
+  // Protect intentional ~~strikethrough~~
+  const STRIKE_TOKEN = '___MARKDOWN_STRIKE_DOUBLE_TILDE___';
   text = text.replace(/~~/g, STRIKE_TOKEN);
+  // Protect remaining single ~ so Marked does not treat ranges like 1~1440 as strikethrough
   text = text.replace(/~/g, '&#126;');
+  // Restore double tildes
   text = text.replace(new RegExp(STRIKE_TOKEN, 'g'), '~~');
 
+  // Normalize Unicode bullets at start of line
   text = text.replace(/^[•●▪◦]\s*/gm, '- ');
+
+  // Step 4: Restore inline codes and code blocks
+  text = text.replace(/___INLINE_CODE_(\d+)___/g, (_, idx) => inlineCodes[Number(idx)]);
+  text = text.replace(/___FENCED_CODE_BLOCK_(\d+)___/g, (_, idx) => codeBlocks[Number(idx)]);
+
   return text;
 }
 

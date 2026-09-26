@@ -9,6 +9,17 @@ interface UserManualModalProps {
 }
 
 export default function UserManualModal({ isOpen, onClose }: UserManualModalProps) {
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleOpenExternal = async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');

@@ -39,13 +39,16 @@ const version = "1.0.0";
     expect(decoded).toContain('<w:tbl>');
   });
 
-  it('formats complex technical specification lists with multi-paragraph continuations, lead-in bolding, and Consolas tokens', () => {
+  it('preserves tildes in ranges without false strikethroughs and indents list continuation paragraphs', () => {
     const specMd = `规则：
 • config_revision 必须为整数且严格递增（≥1，≤4294967295）；设备拒绝不大于当前版本的配置。
-• 阈值约束：deep_dop ≤ light_dop ≤ awake_dop，deep_jitter ≤ light_jitter。
+• 除全部字段必填；sleep_observe_minutes 1~1440，deep_sleep_minutes 2~2880。
+• 阈值约束：motion_moving_mps 0.10~2.00，motion_fast_mps 0.10~3.00。
 • 上报模式（可选，schema v5 追加字段，旧固件忽略）：
 telemetry_profile：0=全量上报（默认），1=精简上报。
+精简上报只改发布时机，下行/上行报文格式都不变：触发条件为人数变化
 省略即保留：不带该字段时设备保留当前模式。
+该策略只影响发布时机，不影响检测与判定。
 
 
 • 校验失败：设备在 status 主题回 rejected + reason。
@@ -54,18 +57,22 @@ telemetry_profile：0=全量上报（默认），1=精简上报。
     const bytes = generateDocxBytes(specMd, 'spec.docx');
     const decoded = new TextDecoder().decode(bytes);
 
-    // 1. Native numbering applied to bullets
+    // 1. Tildes in numeric ranges (1~1440, 2~2880, 0.10~2.00) must NEVER be strikethrough
+    expect(decoded).not.toContain('<w:strike/>');
+    expect(decoded).toContain('1~1440');
+    expect(decoded).toContain('2~2880');
+    expect(decoded).toContain('0.10~2.00');
+
+    // 2. Native numbering applied to bullets
     expect(decoded).toContain('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>');
-    // 2. Indented continuation paragraphs for sub-paragraphs inside list items
-    expect(decoded).toContain('<w:ind w:left="420"/>');
-    // 3. Lead-in terms bolded in deep slate (#0F172A)
-    expect(decoded).toContain('阈值约束：');
-    expect(decoded).toContain('处理流程：');
-    // 4. Technical identifiers rendered in Consolas monospace
-    expect(decoded).toContain('config_revision');
-    expect(decoded).toContain('w:ascii="Consolas"');
-    // 5. CJK justification & auto-spacing enabled
-    expect(decoded).toContain('<w:jc w:val="both"/>');
+
+    // 3. Continuation lines within list items have text-aligned indent (480 dxa)
+    expect(decoded).toContain('<w:ind w:left="480"/>');
+    expect(decoded).toContain('telemetry_profile：0=全量上报');
+    expect(decoded).toContain('处理流程：received');
+
+    // 4. Microsoft YaHei font used consistently
+    expect(decoded).toContain('Microsoft YaHei');
     expect(decoded).toContain('<w:autoSpaceDE w:val="1"/>');
   });
 });

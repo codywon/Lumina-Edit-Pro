@@ -110,121 +110,40 @@ interface RunFormat {
   italic?: boolean;
   strike?: boolean;
   code?: boolean;
-  techToken?: boolean;
   highlight?: boolean;
   color?: string;
   linkRId?: string;
 }
 
 /**
- * Regex for technical identifiers embedded in prose (e.g. `config_revision`, `bed_slots[]`,
- * `interference_regions[0..3]`, `offset_*`, `0x0A04`, `radar_z_min/max`).
- * Renders them with crisp Consolas monospace font without garish orange text.
+ * Preprocess Markdown:
+ * 1. Protect range expressions like `1~1440` from being falsely parsed as strike-through (`<del>`).
+ *    In GFM, double tilde `~~deleted~~` is strike-through, but Marked treats single tilde `~` as strike too.
+ * 2. Normalize Unicode bullet points (`•`, `●`, `▪`, `◦`) to standard Markdown `- ` bullets.
  */
-const TECH_IDENTIFIER_REGEX =
-  /([a-zA-Z_][a-zA-Z0-9_]*(?:\/[a-zA-Z0-9_*]+)*(?:\[\d*(?:\.\.\d+)?\]|\*)?|0x[0-9a-fA-F]+)/g;
+function preprocessMarkdown(markdown: string): string {
+  const STRIKE_TOKEN = '___MARKDOWN_STRIKE_DOUBLE_TILDE___';
+  let text = markdown.replace(/\r\n/g, '\n');
 
-function isLikelyTechnicalToken(token: string): boolean {
-  if (token.includes('_') || token.includes('[') || token.includes('*') || token.startsWith('0x')) {
-    return true;
-  }
-  // Common camelCase or technical protocol/status keywords in technical specs
-  if (/^[a-z]+[A-Z][a-zA-Z0-9]*$/.test(token)) {
-    return true;
-  }
-  if (/^(received|persisted|applied|rejected|stale|present|empty|full|lite|compact|string|int|uint32|float|bool|JSON|MQTT|UART|NVS|ESP32|LD6004)$/i.test(token)) {
-    return true;
-  }
-  return false;
+  // Protect intentional ~~strikethrough~~
+  text = text.replace(/~~/g, STRIKE_TOKEN);
+  // Neutralize remaining single ~ by converting to HTML entity so Marked never strikes out ranges like 1~1440
+  text = text.replace(/~/g, '&#126;');
+  // Restore double tildes
+  text = text.replace(new RegExp(STRIKE_TOKEN, 'g'), '~~');
+
+  // Normalize Unicode bullets at start of line
+  text = text.replace(/^[•●▪◦]\s*/gm, '- ');
+
+  return text;
 }
 
 /**
- * Detect whether a paragraph/list item starts with a Lead-in Definition Term:
- * e.g. `阈值约束：...`, `区域约束：...`, `上报模式（可选，schema v5 追加字段，旧固件忽略）：...`, `处理流程：...`
- */
-function splitLeadInTerm(text: string): { leadIn: string; rest: string } | null {
-  const match = text.match(/^([^\n：:]{2,28}[：:])(\s*[\s\S]*)$/);
-  if (!match) return null;
-  const candidate = match[1];
-  // Avoid matching URLs like http: or https:
-  if (/https?:$/i.test(candidate)) return null;
-  // Ensure the lead-in phrase is concise (excluding parenthetical notes)
-  const corePhrase = candidate.replace(/（[^）]*）|\([^)]*\)/g, '').replace(/[：:]$/, '').trim();
-  if (corePhrase.length >= 2 && corePhrase.length <= 16) {
-    return { leadIn: candidate, rest: match[2] };
-  }
-  return null;
-}
-
-/**
- * Pre-process raw Markdown to normalize Unicode bullet lists (`• `, `● `, `▪ `) and
- * preserve multi-paragraph list continuations so AST structure is 100% faithful.
- */
-function preprocessMarkdownForCommercialLayout(markdown: string): string {
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
-  const result: string[] = [];
-  let inBulletRegion = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const trimmed = rawLine.trim();
-
-    // Check if line starts with Unicode bullet (`•`, `●`, `▪`, `◦`) or standard Markdown bullet (`- `, `* `)
-    const unicodeBulletMatch = trimmed.match(/^[•●▪◦]\s*(.+)$/);
-    const stdBulletMatch = rawLine.match(/^(\s*[-*+]|\s*\d+\.)\s+(.+)$/);
-
-    if (unicodeBulletMatch) {
-      inBulletRegion = true;
-      result.push(`- ${unicodeBulletMatch[1]}`);
-      continue;
-    }
-
-    if (stdBulletMatch) {
-      inBulletRegion = true;
-      result.push(rawLine);
-      continue;
-    }
-
-    // Check if this line breaks out of a list region (headings, tables, code fences, blockquotes, horizontal rules, or standalone section label like `规则：`)
-    if (
-      /^#{1,6}\s/.test(trimmed) ||
-      /^```/.test(trimmed) ||
-      /^\|/.test(trimmed) ||
-      /^>\s/.test(trimmed) ||
-      /^---+$/.test(trimmed) ||
-      (/^[^\n：:]{2,12}[：:]$/.test(trimmed) && !inBulletRegion)
-    ) {
-      inBulletRegion = false;
-      result.push(rawLine);
-      continue;
-    }
-
-    // If we are inside a bullet list region and encounter a non-empty line that does NOT start with a bullet:
-    // Check if it's a continuation sub-paragraph of the current bullet item!
-    if (inBulletRegion && trimmed.length > 0) {
-      // Look ahead: if this line follows a bullet item (even across a single blank line when subsequent lines also belong to the rule block or another bullet follows)
-      // We indent it by 2 spaces as a distinct sub-paragraph (`\n\n  ...`) so Marked AST attaches it as a child paragraph of the current `list_item`!
-      const prevLine = result.length > 0 ? result[result.length - 1] : '';
-      if (prevLine.trim() !== '') {
-        result.push('');
-      }
-      result.push(`  ${trimmed}`);
-      continue;
-    }
-
-    result.push(rawLine);
-  }
-
-  return result.join('\n');
-}
-
-/**
- * Convert Markdown string into a native OpenXML 2.0 (.docx) binary Uint8Array
- * with commercial-grade whitepaper typography.
+ * Convert Markdown string into a native, commercial-grade OpenXML (.docx) binary Uint8Array.
  */
 export function generateDocxBytes(markdown: string, title = 'Lumina Document'): Uint8Array {
-  const normalizedMarkdown = preprocessMarkdownForCommercialLayout(markdown);
-  const html = marked.parse(normalizedMarkdown, { async: false, gfm: true, breaks: true }) as string;
+  const normalized = preprocessMarkdown(markdown);
+  const html = marked.parse(normalized, { async: false, gfm: true, breaks: true }) as string;
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
   const root = doc.body.firstElementChild || doc.body;
@@ -254,24 +173,19 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     return id;
   };
 
-  const renderSingleRun = (text: string, fmt: RunFormat = {}): string => {
+  const renderRun = (text: string, fmt: RunFormat = {}): string => {
     if (!text) return '';
     const rPr: string[] = [];
 
     if (fmt.code) {
-      // Explicit inline code (`code`): slate navy monospace pill
-      rPr.push('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:eastAsia="Microsoft YaHei"/>');
-      rPr.push('<w:sz w:val="19.5"/><w:szCs w:val="19.5"/>');
-      rPr.push('<w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>');
-      rPr.push('<w:color w:val="0F172A"/>');
-    } else if (fmt.techToken) {
-      // Auto-detected technical identifier in prose: clean Consolas monospace, deep slate color
+      // Explicit inline code: Consolas monospace, 10pt, clean gray pill shading
       rPr.push('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:eastAsia="Microsoft YaHei"/>');
       rPr.push('<w:sz w:val="20"/><w:szCs w:val="20"/>');
-      rPr.push('<w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/>');
-      rPr.push(`<w:color w:val="${fmt.color || '0F172A'}"/>`);
+      rPr.push('<w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>');
+      rPr.push('<w:color w:val="0F172A"/>');
     } else {
-      rPr.push('<w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Microsoft YaHei"/>');
+      // Standard commercial body font: Microsoft YaHei across Latin and East Asia for consistent metrics
+      rPr.push('<w:rFonts w:ascii="Microsoft YaHei" w:hAnsi="Microsoft YaHei" w:eastAsia="Microsoft YaHei" w:cs="Microsoft YaHei"/>');
       if (fmt.color) {
         rPr.push(`<w:color w:val="${fmt.color}"/>`);
       }
@@ -297,238 +211,50 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     return runXml;
   };
 
-  /**
-   * Render text with automatic micro-typography for technical tokens (`config_revision`, `bed_slots[]`, etc.)
-   */
-  const renderProseTextWithTechTokens = (text: string, fmt: RunFormat = {}): string => {
-    if (!text) return '';
-    if (fmt.code || fmt.bold) {
-      return renderSingleRun(text, fmt);
-    }
-
+  const renderInlineNodes = (nodes: NodeListOf<ChildNode> | ChildNode[], fmt: RunFormat = {}): string => {
     let out = '';
-    let lastIndex = 0;
-    TECH_IDENTIFIER_REGEX.lastIndex = 0;
-    let match: RegExpExecArray | null;
-
-    while ((match = TECH_IDENTIFIER_REGEX.exec(text)) !== null) {
-      const token = match[0];
-      const index = match.index;
-      if (isLikelyTechnicalToken(token)) {
-        if (index > lastIndex) {
-          out += renderSingleRun(text.slice(lastIndex, index), fmt);
-        }
-        out += renderSingleRun(token, { ...fmt, techToken: true });
-        lastIndex = index + token.length;
-      }
-    }
-
-    if (lastIndex < text.length) {
-      out += renderSingleRun(text.slice(lastIndex), fmt);
-    }
-    return out;
-  };
-
-  const renderInlineNodes = (
-    nodes: NodeListOf<ChildNode> | ChildNode[],
-    fmt: RunFormat = {},
-    enableLeadInHighlight = false
-  ): string => {
-    const nodeList = Array.from(nodes);
-    let out = '';
-    let leadInChecked = !enableLeadInHighlight;
-
-    for (let i = 0; i < nodeList.length; i++) {
-      const node = nodeList[i];
+    Array.from(nodes).forEach((node) => {
       if (node.nodeType === Node.TEXT_NODE) {
-        const rawText = node.textContent || '';
-        if (!leadInChecked && rawText.trim().length > 0) {
-          leadInChecked = true;
-          const split = splitLeadInTerm(rawText);
-          if (split) {
-            out += renderSingleRun(split.leadIn, { ...fmt, bold: true, color: '0F172A' });
-            out += renderProseTextWithTechTokens(split.rest, fmt);
-            continue;
-          }
-        }
-        out += renderProseTextWithTechTokens(rawText, fmt);
+        out += renderRun(node.textContent || '', fmt);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
-        leadInChecked = true;
         const el = node as HTMLElement;
         const tag = el.tagName.toLowerCase();
         if (tag === 'strong' || tag === 'b') {
-          out += renderInlineNodes(el.childNodes, { ...fmt, bold: true, color: fmt.color || '0F172A' }, false);
+          out += renderInlineNodes(el.childNodes, { ...fmt, bold: true, color: fmt.color || '0F172A' });
         } else if (tag === 'em' || tag === 'i') {
-          out += renderInlineNodes(el.childNodes, { ...fmt, italic: true }, false);
+          out += renderInlineNodes(el.childNodes, { ...fmt, italic: true });
         } else if (tag === 'del' || tag === 's') {
-          out += renderInlineNodes(el.childNodes, { ...fmt, strike: true }, false);
+          out += renderInlineNodes(el.childNodes, { ...fmt, strike: true });
         } else if (tag === 'mark') {
-          out += renderInlineNodes(el.childNodes, { ...fmt, highlight: true }, false);
+          out += renderInlineNodes(el.childNodes, { ...fmt, highlight: true });
         } else if (tag === 'code') {
-          out += renderSingleRun(el.textContent || '', { ...fmt, code: true });
+          out += renderRun(el.textContent || '', { ...fmt, code: true });
         } else if (tag === 'a') {
           const href = el.getAttribute('href') || '';
           if (href && (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:'))) {
             const rId = registerHyperlink(href);
-            out += renderInlineNodes(el.childNodes, { ...fmt, linkRId: rId }, false);
+            out += renderInlineNodes(el.childNodes, { ...fmt, linkRId: rId });
           } else {
-            out += renderInlineNodes(el.childNodes, fmt, false);
+            out += renderInlineNodes(el.childNodes, fmt);
           }
         } else if (tag === 'br') {
           out += '<w:r><w:br/></w:r>';
         } else if (tag === 'input' && el.getAttribute('type') === 'checkbox') {
           const checked = el.hasAttribute('checked');
-          out += renderSingleRun(checked ? '☑ ' : '☐ ', { ...fmt, bold: true, color: checked ? '10B981' : '64748B' });
+          out += renderRun(checked ? '☑ ' : '☐ ', { ...fmt, bold: true, color: checked ? '10B981' : '64748B' });
         } else if (tag === 'img') {
           const alt = el.getAttribute('alt') || '图表';
-          out += renderSingleRun(`[🖼️ ${alt}]`, { ...fmt, color: '64748B', italic: true });
+          out += renderRun(`[🖼️ ${alt}]`, { ...fmt, color: '64748B', italic: true });
         } else {
-          out += renderInlineNodes(el.childNodes, fmt, false);
+          out += renderInlineNodes(el.childNodes, fmt);
         }
       }
-    }
-    return out;
-  };
-
-  /**
-   * Render a list (<ul> or <ol>) using Word's native numbering.xml (`w:numPr`)
-   * and properly indenting multi-paragraph continuations inside any `<li>`!
-   */
-  const renderListElement = (listEl: HTMLElement, level = 0): string => {
-    const isOrdered = listEl.tagName.toLowerCase() === 'ol';
-    const numId = isOrdered ? 2 : 1;
-    const ilvl = Math.min(level, 2);
-    const leftIndent = 420 * (ilvl + 1);
-    let out = '';
-
-    const items = Array.from(listEl.children).filter((c) => c.tagName.toLowerCase() === 'li');
-    items.forEach((li) => {
-      const childElements = Array.from(li.children);
-      const hasBlockChildren = childElements.some((c) =>
-        ['p', 'ul', 'ol', 'pre', 'blockquote', 'table'].includes(c.tagName.toLowerCase())
-      );
-
-      if (!hasBlockChildren) {
-        // Single-block list item (check if it contains <br> line breaks that should be rendered as clean continuation paragraphs)
-        const segments = splitNodesByBr(Array.from(li.childNodes));
-        segments.forEach((segNodes, segIdx) => {
-          const isFirstSeg = segIdx === 0;
-          const isLastSeg = segIdx === segments.length - 1;
-          const afterSpacing = isLastSeg ? 120 : 60;
-          if (isFirstSeg) {
-            out += `<w:p>
-              <w:pPr>
-                <w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="${numId}"/></w:numPr>
-                <w:spacing w:before="40" w:after="${afterSpacing}" w:line="332" w:lineRule="auto"/>
-                <w:jc w:val="both"/>
-              </w:pPr>
-              ${renderInlineNodes(segNodes, {}, true)}
-            </w:p>`;
-          } else {
-            // Continuation paragraph aligned with the bullet's text start
-            out += `<w:p>
-              <w:pPr>
-                <w:ind w:left="${leftIndent}"/>
-                <w:spacing w:before="20" w:after="${afterSpacing}" w:line="332" w:lineRule="auto"/>
-                <w:jc w:val="both"/>
-              </w:pPr>
-              ${renderInlineNodes(segNodes, {}, true)}
-            </w:p>`;
-          }
-        });
-        return;
-      }
-
-      // Multi-block list item (e.g. contains multiple <p> or nested <ul>/<ol>)
-      let emittedFirstBullet = false;
-      const childNodes = Array.from(li.childNodes);
-      let inlineBuffer: ChildNode[] = [];
-
-      const flushInlineBuffer = (isLast: boolean) => {
-        if (inlineBuffer.length === 0) return;
-        const text = inlineBuffer.map((n) => n.textContent || '').join('').trim();
-        if (!text) {
-          inlineBuffer = [];
-          return;
-        }
-        const segments = splitNodesByBr(inlineBuffer);
-        segments.forEach((segNodes, segIdx) => {
-          const afterSpacing = isLast && segIdx === segments.length - 1 ? 120 : 60;
-          if (!emittedFirstBullet) {
-            emittedFirstBullet = true;
-            out += `<w:p>
-              <w:pPr>
-                <w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="${numId}"/></w:numPr>
-                <w:spacing w:before="40" w:after="${afterSpacing}" w:line="332" w:lineRule="auto"/>
-                <w:jc w:val="both"/>
-              </w:pPr>
-              ${renderInlineNodes(segNodes, {}, true)}
-            </w:p>`;
-          } else {
-            out += `<w:p>
-              <w:pPr>
-                <w:ind w:left="${leftIndent}"/>
-                <w:spacing w:before="20" w:after="${afterSpacing}" w:line="332" w:lineRule="auto"/>
-                <w:jc w:val="both"/>
-              </w:pPr>
-              ${renderInlineNodes(segNodes, {}, true)}
-            </w:p>`;
-          }
-        });
-        inlineBuffer = [];
-      };
-
-      childNodes.forEach((child, idx) => {
-        const isLastChild = idx === childNodes.length - 1;
-        if (child.nodeType === Node.ELEMENT_NODE) {
-          const childEl = child as HTMLElement;
-          const cTag = childEl.tagName.toLowerCase();
-          if (cTag === 'p') {
-            flushInlineBuffer(false);
-            const segments = splitNodesByBr(Array.from(childEl.childNodes));
-            segments.forEach((segNodes, segIdx) => {
-              const afterSpacing = isLastChild && segIdx === segments.length - 1 ? 120 : 60;
-              if (!emittedFirstBullet) {
-                emittedFirstBullet = true;
-                out += `<w:p>
-                  <w:pPr>
-                    <w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="${numId}"/></w:numPr>
-                    <w:spacing w:before="40" w:after="${afterSpacing}" w:line="332" w:lineRule="auto"/>
-                    <w:jc w:val="both"/>
-                  </w:pPr>
-                  ${renderInlineNodes(segNodes, {}, true)}
-                </w:p>`;
-              } else {
-                out += `<w:p>
-                  <w:pPr>
-                    <w:ind w:left="${leftIndent}"/>
-                    <w:spacing w:before="20" w:after="${afterSpacing}" w:line="332" w:lineRule="auto"/>
-                    <w:jc w:val="both"/>
-                  </w:pPr>
-                  ${renderInlineNodes(segNodes, {}, true)}
-                </w:p>`;
-              }
-            });
-          } else if (cTag === 'ul' || cTag === 'ol') {
-            flushInlineBuffer(false);
-            out += renderListElement(childEl, level + 1);
-          } else {
-            flushInlineBuffer(false);
-            out += renderBlockElement(childEl);
-          }
-        } else {
-          inlineBuffer.push(child);
-        }
-      });
-      flushInlineBuffer(true);
     });
-
     return out;
   };
 
   /**
-   * Helper to split a sequence of inline ChildNodes by `<br>` elements so each line
-   * inside a paragraph/bullet becomes a clean, properly spaced paragraph in Word.
+   * Split a sequence of inline childNodes by `<br>` tags into distinct logical lines.
    */
   const splitNodesByBr = (nodes: ChildNode[]): ChildNode[][] => {
     const groups: ChildNode[][] = [];
@@ -547,7 +273,76 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     if (current.length > 0) {
       groups.push(current);
     }
-    return groups.filter((g) => g.some((n) => (n.textContent || '').trim().length > 0 || n.nodeType === Node.ELEMENT_NODE));
+    return groups.filter((g) =>
+      g.some((n) => (n.textContent || '').trim().length > 0 || n.nodeType === Node.ELEMENT_NODE)
+    );
+  };
+
+  /**
+   * Render list item (bullet or numbered) with Word-native numbering.xml and
+   * proper indentation on continuation lines.
+   */
+  const renderListElement = (listEl: HTMLElement, level = 0): string => {
+    const isOrdered = listEl.tagName.toLowerCase() === 'ol';
+    const numId = isOrdered ? 2 : 1;
+    const ilvl = Math.min(level, 2);
+    const leftIndent = 480 * (ilvl + 1);
+    let out = '';
+
+    const items = Array.from(listEl.children).filter((c) => c.tagName.toLowerCase() === 'li');
+    items.forEach((li) => {
+      // Gather lines inside this li (whether wrapped in <p> or separated by <br>)
+      const directNodes = Array.from(li.childNodes);
+      const childParagraphs = Array.from(li.children).filter((c) => c.tagName.toLowerCase() === 'p');
+
+      const allLineSegments: ChildNode[][] = [];
+
+      if (childParagraphs.length > 0) {
+        childParagraphs.forEach((p) => {
+          const segs = splitNodesByBr(Array.from(p.childNodes));
+          allLineSegments.push(...segs);
+        });
+      } else {
+        const segs = splitNodesByBr(directNodes);
+        allLineSegments.push(...segs);
+      }
+
+      if (allLineSegments.length === 0) {
+        allLineSegments.push(directNodes);
+      }
+
+      // Render first line with Word bullet/numbering
+      // Render subsequent lines as indented continuation paragraphs aligned with text
+      allLineSegments.forEach((segNodes, segIdx) => {
+        const isFirst = segIdx === 0;
+        const isLast = segIdx === allLineSegments.length - 1;
+        const spacingAfter = isLast ? 100 : 40;
+
+        if (isFirst) {
+          out += `<w:p>
+            <w:pPr>
+              <w:pStyle w:val="ListParagraph"/>
+              <w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="${numId}"/></w:numPr>
+              <w:spacing w:before="40" w:after="${spacingAfter}" w:line="288" w:lineRule="auto"/>
+              <w:jc w:val="both"/>
+            </w:pPr>
+            ${renderInlineNodes(segNodes)}
+          </w:p>`;
+        } else {
+          out += `<w:p>
+            <w:pPr>
+              <w:pStyle w:val="ListParagraph"/>
+              <w:ind w:left="${leftIndent}"/>
+              <w:spacing w:before="20" w:after="${spacingAfter}" w:line="288" w:lineRule="auto"/>
+              <w:jc w:val="both"/>
+            </w:pPr>
+            ${renderInlineNodes(segNodes)}
+          </w:p>`;
+        }
+      });
+    });
+
+    return out;
   };
 
   const renderBlockElement = (el: HTMLElement): string => {
@@ -570,7 +365,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
           <w:keepNext/>
           <w:keepLines/>
           <w:outlineLvl w:val="${level - 1}"/>
-          <w:spacing w:before="${level === 1 ? 360 : level === 2 ? 280 : 220}" w:after="${level <= 2 ? 140 : 100}"/>
+          <w:spacing w:before="${level === 1 ? 360 : level === 2 ? 280 : 200}" w:after="${level <= 2 ? 140 : 80}"/>
           ${jc}
           ${bottomBorder}
         </w:pPr>
@@ -589,15 +384,15 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
           ? '<w:jc w:val="right"/>'
           : '<w:jc w:val="both"/>';
 
-      // Check if this paragraph is a concise section lead label (e.g. `规则：`, `说明：`, `参数要求：`)
+      // Section lead label (e.g. `规则：`, `说明：`, `参数要求：`)
       if (/^[^\n：:]{2,14}[：:]$/.test(rawText)) {
         return `<w:p>
           <w:pPr>
             <w:keepNext/>
-            <w:spacing w:before="200" w:after="80" w:line="332" w:lineRule="auto"/>
+            <w:spacing w:before="200" w:after="80" w:line="288" w:lineRule="auto"/>
             ${jc}
           </w:pPr>
-          ${renderSingleRun(rawText, { bold: true, color: '0F172A' })}
+          ${renderRun(rawText, { bold: true, color: '0F172A' })}
         </w:p>`;
       }
 
@@ -605,10 +400,10 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       if (segments.length <= 1) {
         return `<w:p>
           <w:pPr>
-            <w:spacing w:before="60" w:after="140" w:line="332" w:lineRule="auto"/>
+            <w:spacing w:before="40" w:after="120" w:line="288" w:lineRule="auto"/>
             ${jc}
           </w:pPr>
-          ${renderInlineNodes(el.childNodes, {}, true)}
+          ${renderInlineNodes(el.childNodes)}
         </w:p>`;
       }
 
@@ -616,10 +411,10 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
         .map(
           (seg, idx) => `<w:p>
           <w:pPr>
-            <w:spacing w:before="40" w:after="${idx === segments.length - 1 ? 140 : 80}" w:line="332" w:lineRule="auto"/>
+            <w:spacing w:before="20" w:after="${idx === segments.length - 1 ? 120 : 60}" w:line="288" w:lineRule="auto"/>
             ${jc}
           </w:pPr>
-          ${renderInlineNodes(seg, {}, true)}
+          ${renderInlineNodes(seg)}
         </w:p>`
         )
         .join('');
@@ -662,7 +457,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
 
       return `<w:p>
         <w:pPr>
-          <w:spacing w:before="140" w:after="140" w:line="332" w:lineRule="auto"/>
+          <w:spacing w:before="120" w:after="120" w:line="288" w:lineRule="auto"/>
           <w:ind w:left="360" w:right="240"/>
           <w:jc w:val="both"/>
           <w:pBdr>
@@ -670,8 +465,8 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
           </w:pBdr>
           <w:shd w:val="clear" w:color="auto" w:fill="${bgFill}"/>
         </w:pPr>
-        ${badgeTitle ? renderSingleRun(badgeTitle, { bold: true, color: borderColor }) : ''}
-        ${renderProseTextWithTechTokens(cleanedText, { color: '334155' })}
+        ${badgeTitle ? renderRun(badgeTitle, { bold: true, color: borderColor }) : ''}
+        ${renderRun(cleanedText, { color: '334155' })}
       </w:p>`;
     }
 
@@ -691,7 +486,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
 
       return `<w:p>
         <w:pPr>
-          <w:spacing w:before="140" w:after="140" w:line="280" w:lineRule="auto"/>
+          <w:spacing w:before="120" w:after="120" w:line="280" w:lineRule="auto"/>
           <w:ind w:left="200" w:right="200"/>
           <w:jc w:val="left"/>
           <w:pBdr>
@@ -706,12 +501,12 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       </w:p>`;
     }
 
-    // Unordered & Ordered Lists
+    // Lists
     if (tag === 'ul' || tag === 'ol') {
       return renderListElement(el, 0);
     }
 
-    // Tables (Word-grade Grid & Header Styling)
+    // Tables
     if (tag === 'table') {
       const rows = Array.from(el.querySelectorAll('tr'));
       if (rows.length === 0) return '';
@@ -795,7 +590,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       </w:p>`;
     }
 
-    return `<w:p><w:pPr><w:spacing w:after="120"/><w:jc w:val="both"/></w:pPr>${renderInlineNodes(el.childNodes, {}, true)}</w:p>`;
+    return `<w:p><w:pPr><w:spacing w:after="120"/><w:jc w:val="both"/></w:pPr>${renderInlineNodes(el.childNodes)}</w:p>`;
   };
 
   let bodyXml = '';
@@ -804,7 +599,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
   });
 
   if (!bodyXml) {
-    bodyXml = `<w:p>${renderSingleRun(markdown)}</w:p>`;
+    bodyXml = `<w:p>${renderRun(markdown)}</w:p>`;
   }
 
   const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -835,7 +630,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
 
   const numberingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <!-- Abstract Num 0: Commercial Multi-level Bullet List -->
+  <!-- Abstract Num 0: Word Standard Multi-level Bullet List with Explicit Tab Stops -->
   <w:abstractNum w:abstractNumId="0">
     <w:multiLevelType w:val="hybridMultilevel"/>
     <w:lvl w:ilvl="0">
@@ -843,27 +638,45 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       <w:numFmt w:val="bullet"/>
       <w:lvlText w:val="•"/>
       <w:lvlJc w:val="left"/>
-      <w:pPr><w:ind w:left="420" w:hanging="240"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Microsoft YaHei"/><w:b/><w:color w:val="334155"/></w:rPr>
+      <w:pPr>
+        <w:tabs><w:tab w:val="num" w:pos="480"/></w:tabs>
+        <w:ind w:left="480" w:hanging="480"/>
+      </w:pPr>
+      <w:rPr>
+        <w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:hint="default"/>
+        <w:color w:val="0F172A"/>
+      </w:rPr>
     </w:lvl>
     <w:lvl w:ilvl="1">
       <w:start w:val="1"/>
       <w:numFmt w:val="bullet"/>
       <w:lvlText w:val="◦"/>
       <w:lvlJc w:val="left"/>
-      <w:pPr><w:ind w:left="840" w:hanging="240"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Microsoft YaHei"/><w:color w:val="475569"/></w:rPr>
+      <w:pPr>
+        <w:tabs><w:tab w:val="num" w:pos="960"/></w:tabs>
+        <w:ind w:left="960" w:hanging="480"/>
+      </w:pPr>
+      <w:rPr>
+        <w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:hint="default"/>
+        <w:color w:val="334155"/>
+      </w:rPr>
     </w:lvl>
     <w:lvl w:ilvl="2">
       <w:start w:val="1"/>
       <w:numFmt w:val="bullet"/>
       <w:lvlText w:val="▪"/>
       <w:lvlJc w:val="left"/>
-      <w:pPr><w:ind w:left="1260" w:hanging="240"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Microsoft YaHei"/><w:color w:val="64748B"/></w:rPr>
+      <w:pPr>
+        <w:tabs><w:tab w:val="num" w:pos="1440"/></w:tabs>
+        <w:ind w:left="1440" w:hanging="480"/>
+      </w:pPr>
+      <w:rPr>
+        <w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:hint="default"/>
+        <w:color w:val="475569"/>
+      </w:rPr>
     </w:lvl>
   </w:abstractNum>
-  <!-- Abstract Num 1: Commercial Ordered Numbered List -->
+  <!-- Abstract Num 1: Word Standard Ordered Numbered List -->
   <w:abstractNum w:abstractNumId="1">
     <w:multiLevelType w:val="hybridMultilevel"/>
     <w:lvl w:ilvl="0">
@@ -871,8 +684,14 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
       <w:numFmt w:val="decimal"/>
       <w:lvlText w:val="%1."/>
       <w:lvlJc w:val="left"/>
-      <w:pPr><w:ind w:left="420" w:hanging="240"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Microsoft YaHei"/><w:b/><w:color w:val="0F172A"/></w:rPr>
+      <w:pPr>
+        <w:tabs><w:tab w:val="num" w:pos="480"/></w:tabs>
+        <w:ind w:left="480" w:hanging="480"/>
+      </w:pPr>
+      <w:rPr>
+        <w:rFonts w:ascii="Microsoft YaHei" w:hAnsi="Microsoft YaHei" w:eastAsia="Microsoft YaHei"/>
+        <w:color w:val="0F172A"/>
+      </w:rPr>
     </w:lvl>
   </w:abstractNum>
   <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
@@ -884,7 +703,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
   <w:docDefaults>
     <w:rPrDefault>
       <w:rPr>
-        <w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Microsoft YaHei" w:cs="Segoe UI"/>
+        <w:rFonts w:ascii="Microsoft YaHei" w:hAnsi="Microsoft YaHei" w:eastAsia="Microsoft YaHei" w:cs="Microsoft YaHei"/>
         <w:sz w:val="21"/>
         <w:szCs w:val="21"/>
         <w:color w:val="1E293B"/>
@@ -906,13 +725,22 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     <w:name w:val="Normal"/>
     <w:qFormat/>
   </w:style>
+  <w:style w:type="paragraph" w:styleId="ListParagraph">
+    <w:name w:val="List Paragraph"/>
+    <w:basedOn w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr>
+      <w:ind w:left="480"/>
+      <w:contextualSpacing/>
+    </w:pPr>
+  </w:style>
   <w:style w:type="paragraph" w:styleId="Heading1">
     <w:name w:val="heading 1"/>
     <w:basedOn w:val="Normal"/>
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="0"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="38"/><w:color w:val="0F172A"/></w:rPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="36"/><w:szCs w:val="36"/><w:color w:val="0F172A"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading2">
     <w:name w:val="heading 2"/>
@@ -920,7 +748,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="1"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="30"/><w:color w:val="0F172A"/></w:rPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="28"/><w:szCs w:val="28"/><w:color w:val="0F172A"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading3">
     <w:name w:val="heading 3"/>
@@ -928,7 +756,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="2"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="25"/><w:color w:val="0F172A"/></w:rPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="24"/><w:szCs w:val="24"/><w:color w:val="0F172A"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading4">
     <w:name w:val="heading 4"/>
@@ -936,23 +764,7 @@ export function generateDocxBytes(markdown: string, title = 'Lumina Document'): 
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="3"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="23"/><w:color w:val="1E293B"/></w:rPr>
-  </w:style>
-  <w:style w:type="paragraph" w:styleId="Heading5">
-    <w:name w:val="heading 5"/>
-    <w:basedOn w:val="Normal"/>
-    <w:next w:val="Normal"/>
-    <w:qFormat/>
-    <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="4"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="21"/><w:color w:val="334155"/></w:rPr>
-  </w:style>
-  <w:style w:type="paragraph" w:styleId="Heading6">
-    <w:name w:val="heading 6"/>
-    <w:basedOn w:val="Normal"/>
-    <w:next w:val="Normal"/>
-    <w:qFormat/>
-    <w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="5"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="475569"/></w:rPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="22"/><w:szCs w:val="22"/><w:color w:val="1E293B"/></w:rPr>
   </w:style>
 </w:styles>`;
 

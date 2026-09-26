@@ -263,7 +263,17 @@ function HeaderComponent({
         successLabel: ' HTML 网页',
       });
     } else if (format === 'pdf') {
-      window.print();
+      const originalTitle = document.title;
+      // Pre-fill document.title so print-to-PDF automatically defaults the filename to `${baseName}.pdf`
+      document.title = baseName;
+      showToast('如需纯净正文，请在打印选项【更多设置】中取消勾选【页眉和页脚】', 'info');
+      try {
+        window.print();
+      } finally {
+        setTimeout(() => {
+          document.title = originalTitle;
+        }, 1500);
+      }
     } else {
       await saveExportedBytes({
         bytes: new TextEncoder().encode(content),
@@ -333,11 +343,11 @@ function HeaderComponent({
         { label: '打开文件', shortcut: settings.shortcuts.openFile, action: onOpenFile },
         { label: '保存', shortcut: settings.shortcuts.saveFile, action: onSave },
         { label: '打印', shortcut: '', action: () => window.print() },
-        { label: '导出Word', action: () => onOpenExportDocx ? onOpenExportDocx() : void exportMarkdownToDocx(content, undefined, showToast) },
-        { label: '导出为Markdown', action: () => handleExport('md') },
-        { label: '导出为HTML', action: () => handleExport('html') },
         { label: '导出为PDF', action: () => handleExport('pdf') },
-        { label: '导出为长图 (PNG)', action: handleExportLongImage },
+        { label: '导出为Word', action: () => onOpenExportDocx ? onOpenExportDocx() : void exportMarkdownToDocx(content, undefined, showToast) },
+        { label: '导出为HTML', action: () => handleExport('html') },
+        { label: '导出为长图', action: handleExportLongImage },
+        { label: '导出为Markdown', action: () => handleExport('md') },
       ],
     },
     {

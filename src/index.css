@@ -464,6 +464,7 @@ body,
     border-radius: 4px !important;
     background-color: rgba(175, 184, 193, 0.18) !important;
     border: 1px solid rgba(175, 184, 193, 0.22) !important;
+    color: #1f2328 !important;
     white-space: pre-wrap !important;
     word-break: break-word !important;
     overflow-wrap: anywhere !important;
@@ -473,6 +474,7 @@ body,
 
   .dark .prose-custom td code,
   .dark .tiptap td code {
+    color: #f0f6fc !important;
     background-color: rgba(110, 118, 129, 0.25) !important;
     border-color: rgba(110, 118, 129, 0.28) !important;
   }
@@ -1003,14 +1005,24 @@ body,
     .prose-custom pre code {
       background: transparent !important;
       padding: 0 !important;
-      color: inherit !important;
+      color: #e2e8f0 !important;
       display: block !important;
       white-space: pre-wrap !important;
       word-break: break-word !important;
     }
 
-    .prose-custom code {
-      color: #e2e8f0 !important;
+    /* Inline code & table code chips in print MUST be crisp dark ink on light pill */
+    .prose-custom :not(pre) > code,
+    .tiptap :not(pre) > code,
+    .prose-custom td code,
+    .prose-custom th code,
+    .tiptap td code,
+    .tiptap th code {
+      color: #0f172a !important;
+      background-color: #f1f5f9 !important;
+      border: 1px solid #cbd5e1 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
 
     .hljs {

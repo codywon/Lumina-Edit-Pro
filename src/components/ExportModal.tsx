@@ -41,32 +41,32 @@ export default function ExportModal({ isOpen, onClose, content, showToast }: Exp
   };
 
   const themeIcons: Record<ExportThemeId, React.ReactNode> = {
+    whitepaper: <BookOpen size={20} className="text-[#003366]" />,
+    formal: <Landmark size={20} className="text-slate-800 dark:text-slate-200" />,
     report: <BarChart3 size={20} className="text-[#EC5B13]" />,
     minimal: <Feather size={20} className="text-[#475569] dark:text-[#94A3B8]" />,
-    formal: <Landmark size={20} className="text-[#C00000]" />,
-    whitepaper: <BookOpen size={20} className="text-[#1E40AF]" />,
   };
 
   const themePreviewColors: Record<ExportThemeId, { border: string; bg: string; activeRing: string }> = {
+    whitepaper: {
+      border: 'border-[#003366]/40',
+      bg: 'hover:bg-slate-50 dark:hover:bg-slate-800/40',
+      activeRing: 'ring-2 ring-[#003366] bg-[#F0F4F8]/70 dark:bg-[#003366]/15 border-[#003366]',
+    },
+    formal: {
+      border: 'border-slate-400 dark:border-slate-600',
+      bg: 'hover:bg-slate-50 dark:hover:bg-slate-800/40',
+      activeRing: 'ring-2 ring-slate-900 bg-slate-100/80 dark:bg-slate-800/60 border-slate-900',
+    },
     report: {
       border: 'border-[#EC5B13]/40',
-      bg: 'hover:bg-[#FFF7ED] dark:hover:bg-[#EC5B13]/10',
+      bg: 'hover:bg-slate-50 dark:hover:bg-slate-800/40',
       activeRing: 'ring-2 ring-[#EC5B13] bg-[#FFF7ED]/70 dark:bg-[#EC5B13]/15 border-[#EC5B13]',
     },
     minimal: {
       border: 'border-slate-300 dark:border-slate-700',
       bg: 'hover:bg-slate-50 dark:hover:bg-slate-800/40',
       activeRing: 'ring-2 ring-slate-600 bg-slate-100/70 dark:bg-slate-800/60 border-slate-600',
-    },
-    formal: {
-      border: 'border-[#C00000]/40',
-      bg: 'hover:bg-[#FFFBFB] dark:hover:bg-[#C00000]/10',
-      activeRing: 'ring-2 ring-[#C00000] bg-[#FFFBFB] dark:bg-[#C00000]/15 border-[#C00000]',
-    },
-    whitepaper: {
-      border: 'border-[#1E40AF]/40',
-      bg: 'hover:bg-[#EFF6FF] dark:hover:bg-[#1E40AF]/10',
-      activeRing: 'ring-2 ring-[#1E40AF] bg-[#EFF6FF]/70 dark:bg-[#1E40AF]/15 border-[#1E40AF]',
     },
   };
 
@@ -95,7 +95,7 @@ export default function ExportModal({ isOpen, onClose, content, showToast }: Exp
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    导出Word
+                    导出为Word
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     严格对齐国家公文与科技行业出版规范 · 原生 OpenXML 引擎
@@ -216,7 +216,7 @@ export default function ExportModal({ isOpen, onClose, content, showToast }: Exp
                 className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-accent text-white text-xs font-bold hover:bg-accent-strong transition-colors shadow-sm disabled:opacity-50"
               >
                 <FileDown size={15} />
-                <span>{isExporting ? '正在生成...' : '立即导出 Word'}</span>
+                <span>{isExporting ? '正在生成...' : '立即导出为Word'}</span>
               </button>
             </div>
           </motion.div>

@@ -38,9 +38,10 @@ const version = "1.0.0";
     expect(decoded).toContain('word/footer1.xml');
     expect(decoded).toContain('PAGE');
     expect(decoded).toContain('NUMPAGES');
-    // Top banner for report theme
+    // Content is faithfully preserved without arbitrary injected text
     expect(decoded).toContain('养老机构智能体分析报告');
-    expect(decoded).toContain('Generate Time:');
+    expect(decoded).not.toContain('Generate Time:');
+    expect(decoded).not.toContain('Lumina Edit Pro 商业分析报告');
   });
 
   it('preserves numeric ranges without false strikethroughs and indents list continuation paragraphs', () => {
@@ -85,7 +86,7 @@ telemetry_profile：0=全量上报（默认），1=精简上报。
 
     const minimalBytes = generateDocxBytes(md, { themeId: 'minimal' });
     const minimalDecoded = new TextDecoder().decode(minimalBytes);
-    expect(minimalDecoded).toContain('475569');
+    expect(minimalDecoded).toContain('0969DA');
 
     const formalBytes = generateDocxBytes(md, { themeId: 'formal' });
     const formalDecoded = new TextDecoder().decode(formalBytes);

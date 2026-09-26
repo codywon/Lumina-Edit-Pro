@@ -367,9 +367,7 @@ export function generateDocxBytes(
     return out;
   };
 
-  let renderedTopBanner = false;
-
-  const renderBlockElement = (el: HTMLElement, isFirstChild = false): string => {
+  const renderBlockElement = (el: HTMLElement): string => {
     const tag = el.tagName.toLowerCase();
 
     // Headings H1 ~ H6
@@ -377,90 +375,6 @@ export function generateDocxBytes(
       const level = parseInt(tag.slice(1), 10);
       const align = el.getAttribute('align') || el.style.textAlign || '';
       const jc = align === 'center' ? '<w:jc w:val="center"/>' : align === 'right' ? '<w:jc w:val="right"/>' : '';
-
-      // Commercial Report Theme Top Banner (matching Executive Analysis Reports)
-      if (level === 1 && theme.hasBanner && !renderedTopBanner && isFirstChild) {
-        renderedTopBanner = true;
-        const h1Text = el.textContent?.trim() || docTitle;
-        const now = new Date();
-        const dateStr = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()} ${String(
-          now.getHours()
-        ).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-
-        return `<w:tbl>
-          <w:tblPr>
-            <w:tblW w:w="5000" w:type="pct"/>
-            <w:tblBorders>
-              <w:top w:val="none"/>
-              <w:bottom w:val="none"/>
-              <w:left w:val="none"/>
-              <w:right w:val="none"/>
-              <w:insideH w:val="none"/>
-              <w:insideV w:val="none"/>
-            </w:tblBorders>
-            <w:tblLayout w:type="autofit"/>
-          </w:tblPr>
-          <w:tr>
-            <w:tc>
-              <w:tcPr>
-                <w:shd w:val="clear" w:color="auto" w:fill="${theme.bannerBg || 'EC5B13'}"/>
-                <w:tcMar>
-                  <w:top w:w="480" w:type="dxa"/>
-                  <w:bottom w:w="480" w:type="dxa"/>
-                  <w:left w:w="360" w:type="dxa"/>
-                  <w:right w:w="360" w:type="dxa"/>
-                </w:tcMar>
-                <w:vAlign w:val="center"/>
-              </w:tcPr>
-              <w:p>
-                <w:pPr>
-                  <w:jc w:val="center"/>
-                  <w:spacing w:before="60" w:after="60"/>
-                  <w:pStyle w:val="Heading1"/>
-                  <w:outlineLvl w:val="0"/>
-                </w:pPr>
-                <w:r>
-                  <w:rPr>
-                    <w:rFonts w:ascii="${theme.fontHeadingAscii}" w:eastAsia="${theme.fontHeadingEastAsia}"/>
-                    <w:b/><w:bCs/>
-                    <w:sz w:val="46"/><w:szCs w:val="46"/>
-                    <w:color w:val="${theme.bannerTextColor || 'FFFFFF'}"/>
-                  </w:rPr>
-                  <w:t xml:space="preserve">${escapeXml(h1Text)}</w:t>
-                </w:r>
-              </w:p>
-            </w:tc>
-          </w:tr>
-        </w:tbl>
-        <w:p>
-          <w:pPr>
-            <w:spacing w:before="160" w:after="160"/>
-            <w:pBdr>
-              <w:bottom w:val="single" w:sz="12" w:space="8" w:color="${theme.metadataBorderColor || 'EC5B13'}"/>
-            </w:pBdr>
-            <w:tabs>
-              <w:tab w:val="right" w:pos="8845"/>
-            </w:tabs>
-          </w:pPr>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Segoe UI" w:eastAsia="${theme.fontEastAsia}"/>
-              <w:sz w:val="18"/>
-              <w:color w:val="64748B"/>
-            </w:rPr>
-            <w:t xml:space="preserve">Generate Time: ${dateStr}</w:t>
-          </w:r>
-          <w:r><w:tab/></w:r>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Segoe UI" w:eastAsia="${theme.fontEastAsia}"/>
-              <w:sz w:val="18"/>
-              <w:color w:val="64748B"/>
-            </w:rPr>
-            <w:t xml:space="preserve">Lumina Edit Pro 商业分析报告</w:t>
-          </w:r>
-        </w:p>`;
-      }
 
       // GB/T 9704-2012 Formal Official Document Heading Hierarchy:
       // H1 = 三号黑体 (SimHei); H2 = 三号楷体 (KaiTi); H3 = 三号仿宋加粗 (FangSong); H4 = 三号仿宋
@@ -484,7 +398,7 @@ export function generateDocxBytes(
       const bottomBorder =
         level === 1 && theme.id === 'whitepaper'
           ? `<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="6" w:color="${theme.accentColor}"/></w:pBdr>`
-          : level === 1 && theme.id === 'minimal'
+          : level === 1 && (theme.id === 'minimal' || theme.id === 'report')
           ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="6" w:color="${theme.tableBorderColor}"/></w:pBdr>`
           : level === 2 && theme.id === 'whitepaper'
           ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="${theme.tableInnerBorderColor}"/></w:pBdr>`
@@ -778,8 +692,8 @@ export function generateDocxBytes(
 
   let bodyXml = '';
   const rootChildren = Array.from(root.children);
-  rootChildren.forEach((child, idx) => {
-    bodyXml += renderBlockElement(child as HTMLElement, idx === 0);
+  rootChildren.forEach((child) => {
+    bodyXml += renderBlockElement(child as HTMLElement);
   });
 
   if (!bodyXml) {
@@ -963,27 +877,11 @@ export function generateDocxBytes(
 <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:p>
     <w:pPr>
-      <w:tabs>
-        <w:tab w:val="right" w:pos="${contentWidthDxa}"/>
-      </w:tabs>
+      <w:jc w:val="right"/>
       <w:pBdr>
         <w:bottom w:val="single" w:sz="4" w:space="4" w:color="CBD5E1"/>
       </w:pBdr>
     </w:pPr>
-    ${
-      theme.headerLeftText
-        ? `<w:r>
-      <w:rPr>
-        <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>
-        <w:sz w:val="17"/><w:szCs w:val="17"/>
-        <w:b/><w:bCs/>
-        <w:color w:val="${theme.accentColor}"/>
-      </w:rPr>
-      <w:t xml:space="preserve">${escapeXml(theme.headerLeftText)}</w:t>
-    </w:r>`
-        : ''
-    }
-    <w:r><w:tab/></w:r>
     <w:r>
       <w:rPr>
         <w:rFonts w:ascii="${theme.fontAscii}" w:eastAsia="${theme.fontEastAsia}"/>

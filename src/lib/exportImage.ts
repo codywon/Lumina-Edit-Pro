@@ -1,8 +1,25 @@
+import { toPng, toBlob } from 'html-to-image';
 import { saveExportedBytes } from './exportSave';
 
 /**
+ * Filter function to skip non-printable or UI overlay nodes during rasterization.
+ */
+function imageExportFilter(node: HTMLElement): boolean {
+  if (!node || !node.classList) return true;
+  if (
+    node.classList.contains('print-hide') ||
+    node.classList.contains('ai-panel') ||
+    node.classList.contains('sidebar') ||
+    node.getAttribute('role') === 'dialog'
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Render document DOM element to a high-resolution long image (PNG)
- * Uses SVG foreignObject rasterization technique (100% native, 0 external bloat).
+ * Uses html-to-image with automatic font embedding, image inlining & Retina 2x scale.
  */
 export async function exportElementToLongImage(
   element: HTMLElement,
@@ -12,98 +29,61 @@ export async function exportElementToLongImage(
   try {
     showToast?.('正在生成高清长图，请稍候…', 'info');
 
+    const isDark = document.documentElement.classList.contains('dark');
+    const backgroundColor = isDark ? '#121214' : '#ffffff';
+
     const width = Math.max(element.scrollWidth, 800);
     const height = Math.max(element.scrollHeight, 600);
 
-    // Deep clone the element to sanitize styles
-    const clone = element.cloneNode(true) as HTMLElement;
+    // High quality 2x Retina configuration
+    const options = {
+      quality: 0.95,
+      pixelRatio: 2,
+      backgroundColor,
+      width,
+      height,
+      filter: imageExportFilter as (domNode: HTMLElement) => boolean,
+      style: {
+        transform: 'none',
+        margin: '0',
+        padding: '32px',
+        boxSizing: 'border-box',
+        background: backgroundColor,
+      },
+      // Skip problematic external cross-origin webfonts if unavailable
+      skipFonts: false,
+    };
 
-    // Collect all computed stylesheets into an inline style tag
-    let cssText = '';
-    for (let i = 0; i < document.styleSheets.length; i++) {
-      try {
-        const sheet = document.styleSheets[i];
-        for (let j = 0; j < sheet.cssRules.length; j++) {
-          cssText += sheet.cssRules[j].cssText + '\n';
-        }
-      } catch {
-        // Cross-origin sheets can be safely ignored
-      }
+    let pngBlob: Blob | null = null;
+
+    try {
+      pngBlob = await toBlob(element, options);
+    } catch (primaryErr) {
+      console.warn('html-to-image with fonts failed, retrying with skipFonts: true', primaryErr);
+      // Fallback: retry with local fonts without waiting on network font resources
+      pngBlob = await toBlob(element, { ...options, skipFonts: true });
     }
 
-    const wrapper = document.createElement('div');
-    wrapper.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
-    wrapper.style.width = `${width}px`;
-    wrapper.style.minHeight = `${height}px`;
-    wrapper.style.background = document.documentElement.classList.contains('dark') ? '#121212' : '#ffffff';
-    wrapper.style.color = document.documentElement.classList.contains('dark') ? '#e6edf3' : '#1f2328';
-    wrapper.style.padding = '40px';
-    wrapper.style.boxSizing = 'border-box';
-    wrapper.appendChild(clone);
+    if (!pngBlob) {
+      // Fallback 2: try toPng data URL if blob generation failed
+      const dataUrl = await toPng(element, { ...options, skipFonts: true });
+      const res = await fetch(dataUrl);
+      pngBlob = await res.blob();
+    }
 
-    const svgString = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-        <style>${cssText}</style>
-        <foreignObject width="100%" height="100%">
-          ${new XMLSerializer().serializeToString(wrapper)}
-        </foreignObject>
-      </svg>
-    `;
+    if (!pngBlob) {
+      throw new Error('Canvas blob generation produced null');
+    }
 
-    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const blobURL = URL.createObjectURL(svgBlob);
-
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const scale = 2; // 2x Retina resolution
-          canvas.width = width * scale;
-          canvas.height = height * scale;
-
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Cannot create Canvas 2D context'));
-            return;
-          }
-
-          ctx.scale(scale, scale);
-          ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#121212' : '#ffffff';
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(image, 0, 0, width, height);
-
-          canvas.toBlob(async (pngBlob) => {
-            if (!pngBlob) {
-              reject(new Error('Failed to create PNG blob'));
-              return;
-            }
-            URL.revokeObjectURL(blobURL);
-            const arrayBuf = await pngBlob.arrayBuffer();
-            await saveExportedBytes({
-              bytes: new Uint8Array(arrayBuf),
-              defaultFileName: fileName.endsWith('.png') ? fileName : `${fileName}.png`,
-              filterName: 'PNG 高清长图 (*.png)',
-              extensions: ['png'],
-              mimeType: 'image/png',
-              showToast,
-              successLabel: '高清长图',
-            });
-            resolve();
-          }, 'image/png');
-        } catch (err) {
-          reject(err);
-        }
-      };
-
-      image.onerror = (err) => {
-        URL.revokeObjectURL(blobURL);
-        reject(err);
-      };
-
-      image.src = blobURL;
+    const arrayBuf = await pngBlob.arrayBuffer();
+    await saveExportedBytes({
+      bytes: new Uint8Array(arrayBuf),
+      defaultFileName: fileName.endsWith('.png') ? fileName : `${fileName}.png`,
+      filterName: 'PNG 高清长图 (*.png)',
+      extensions: ['png'],
+      mimeType: 'image/png',
+      showToast,
+      successLabel: '高清长图',
     });
   } catch (error) {
     console.error('Long image export error:', error);

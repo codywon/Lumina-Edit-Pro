@@ -396,7 +396,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         max={1.5}
                         step={0.05}
                         unit="em"
-                        value={settings.paragraphSpacing ?? 0.6}
+                        value={settings.paragraphSpacing ?? 0.5}
                         onChange={(val) => updateSettings({ paragraphSpacing: val })}
                       />
                     </section>

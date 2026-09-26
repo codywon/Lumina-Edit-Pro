@@ -39,8 +39,8 @@ const defaultSettings: Settings = {
   customThemeColor: '#ec5b13',
   fontSize: 16,
   fontFamily: 'Inter',
-  lineHeight: 1.6,
-  paragraphSpacing: 0.6,
+  lineHeight: 1.75,
+  paragraphSpacing: 0.5,
   typewriterMode: false,
   focusMode: false,
   autoSave: false,
@@ -123,8 +123,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     // Apply some settings globally via CSS variables or classes
     const root = document.documentElement;
     root.style.setProperty('--editor-font-size', `${settings.fontSize}px`);
-    root.style.setProperty('--editor-line-height', `${settings.lineHeight}`);
-    root.style.setProperty('--editor-paragraph-spacing', `${settings.paragraphSpacing || 0.6}em`);
+    root.style.setProperty('--editor-line-height', `${settings.lineHeight || 1.75}`);
+    root.style.setProperty('--editor-paragraph-spacing', `${settings.paragraphSpacing || 0.5}em`);
 
     const fontStackMap: Record<string, string> = {
       'Inter': 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif',

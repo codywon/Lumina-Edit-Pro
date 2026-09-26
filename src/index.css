@@ -188,17 +188,17 @@ body,
   .prose-custom li,
   .prose-custom blockquote,
   .prose-custom div {
-    line-height: var(--editor-line-height, 1.6) !important;
+    line-height: var(--editor-line-height, 1.75) !important;
   }
 
   .prose-custom p {
-    margin-top: var(--editor-paragraph-spacing, 0.6em) !important;
-    margin-bottom: var(--editor-paragraph-spacing, 0.6em) !important;
+    margin-top: var(--editor-paragraph-spacing, 0.5em) !important;
+    margin-bottom: var(--editor-paragraph-spacing, 0.5em) !important;
   }
 
   .prose-custom li {
-    margin-top: calc(var(--editor-paragraph-spacing, 0.6em) * 0.35) !important;
-    margin-bottom: calc(var(--editor-paragraph-spacing, 0.6em) * 0.35) !important;
+    margin-top: calc(var(--editor-paragraph-spacing, 0.5em) * 0.35) !important;
+    margin-bottom: calc(var(--editor-paragraph-spacing, 0.5em) * 0.35) !important;
   }
 
   .prose-custom :not(pre) > code {

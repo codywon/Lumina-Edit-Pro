@@ -139,7 +139,7 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
   const { settings, updateSettings } = useSettings();
   const { provider, chatPreferences, memory, updateMemory } = useAI();
   const [lineHeight, setLineHeight] = useState(settings.lineHeight);
-  const [paragraphSpacing, setParagraphSpacing] = useState(settings.paragraphSpacing ?? 0.6);
+  const [paragraphSpacing, setParagraphSpacing] = useState(settings.paragraphSpacing ?? 0.5);
   const editorContentClassName = settings.focusMode ? "w-full max-w-none" : "max-w-4xl mx-auto";
   const [showLineHeightMenu, setShowLineHeightMenu] = useState(false);
   const [tablePadding, setTablePadding] = useState(0.6);
@@ -253,7 +253,7 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
   }, [settings.lineHeight]);
 
   useEffect(() => {
-    setParagraphSpacing(settings.paragraphSpacing ?? 0.6);
+    setParagraphSpacing(settings.paragraphSpacing ?? 0.5);
   }, [settings.paragraphSpacing]);
 
   // Scroll-Spy Radar Effect: detects current heading in viewport and updates outline

@@ -21,6 +21,21 @@ declare module '@tiptap/core' {
 }
 
 /**
+ * Normalize LaTeX commands:
+ * In Markdown source, backslashes are often escaped (e.g. \\text, \\times, \\circ, \\alpha).
+ * This standardizes double backslashes before LaTeX command names to single backslashes for KaTeX.
+ */
+export function normalizeLatex(raw: string): string {
+  if (!raw) return '';
+  let s = raw.trim();
+
+  // Normalize Markdown-escaped LaTeX commands: \\command -> \command
+  s = s.replace(/\\\\([a-zA-Z]+)/g, (_, cmd) => '\\' + cmd);
+
+  return s;
+}
+
+/**
  * Inline math parsing rule for markdown-it
  */
 function mathInlineRule(state: any, silent: boolean) {
@@ -95,7 +110,7 @@ function mathInlineRule(state: any, silent: boolean) {
   if (!silent) {
     const content = src.slice(contentStart, matchEnd);
     const token = state.push('math_inline', 'span', 0);
-    token.content = content;
+    token.content = normalizeLatex(content);
     token.markup = isDouble ? '$$' : '$';
   }
 
@@ -160,7 +175,7 @@ function mathBlockRule(state: any, startLine: number, endLine: number, silent: b
 
   const token = state.push('math_block', 'div', 0);
   token.block = true;
-  token.content = lines.join('\n');
+  token.content = normalizeLatex(lines.join('\n'));
   token.map = [startLine, state.line];
   token.markup = '$$';
 

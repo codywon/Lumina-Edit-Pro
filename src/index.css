@@ -517,10 +517,20 @@ body,
   }
 
   /* KaTeX Math Formula Typography & Table Integration */
+  .math-inline-wrapper,
+  .math-inline-wrapper *,
+  .prose-custom table .katex,
+  .prose-custom table .katex *,
+  .tiptap table .katex,
+  .tiptap table .katex * {
+    white-space: nowrap !important;
+  }
+
   .math-inline-wrapper {
-    display: inline-flex;
-    vertical-align: baseline;
+    display: inline-flex !important;
+    vertical-align: baseline !important;
     line-height: inherit;
+    max-width: 100%;
   }
 
   .math-inline-wrapper .katex {
@@ -535,8 +545,10 @@ body,
   .tiptap td .math-inline-wrapper,
   .tiptap th .math-inline-wrapper {
     font-size: 0.95em;
-    white-space: nowrap;
-    vertical-align: baseline;
+    white-space: nowrap !important;
+    vertical-align: baseline !important;
+    display: inline-flex !important;
+    align-items: baseline !important;
   }
 
   .dark .katex {

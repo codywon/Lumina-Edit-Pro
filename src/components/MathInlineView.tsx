@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 're
 import { createPortal } from 'react-dom';
 import { NodeViewProps, NodeViewWrapper } from '@tiptap/react';
 import katex from 'katex';
+import { normalizeLatex } from '../lib/mathExtension';
 import { Check, X, Trash2, Sigma, AlertCircle, CornerDownLeft } from 'lucide-react';
 
 export default function MathInlineView({
@@ -26,12 +27,12 @@ export default function MathInlineView({
 
   // Render KaTeX HTML for the inline formula
   const renderedHtml = useMemo(() => {
-    const trimmed = (latex || '').trim();
-    if (!trimmed) {
+    const normalized = normalizeLatex(latex || '');
+    if (!normalized) {
       return null;
     }
     try {
-      return katex.renderToString(trimmed, {
+      return katex.renderToString(normalized, {
         throwOnError: false,
         displayMode: false,
       });
@@ -42,11 +43,11 @@ export default function MathInlineView({
 
   // Render live preview for the editing draft
   const previewHtml = useMemo(() => {
-    const trimmed = (draftLatex || '').trim();
-    if (!trimmed) return null;
+    const normalized = normalizeLatex(draftLatex || '');
+    if (!normalized) return null;
     try {
       return {
-        html: katex.renderToString(trimmed, {
+        html: katex.renderToString(normalized, {
           throwOnError: true,
           displayMode: false,
         }),
@@ -56,7 +57,7 @@ export default function MathInlineView({
       // Return raw string with error message
       try {
         return {
-          html: katex.renderToString(trimmed, {
+          html: katex.renderToString(normalized, {
             throwOnError: false,
             displayMode: false,
           }),

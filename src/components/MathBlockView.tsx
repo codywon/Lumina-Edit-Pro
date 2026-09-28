@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { NodeViewProps, NodeViewWrapper } from '@tiptap/react';
 import katex from 'katex';
+import { normalizeLatex } from '../lib/mathExtension';
 import { Check, Copy, Edit3, Trash2, Sigma, AlertCircle, Eye, Code } from 'lucide-react';
 
 export default function MathBlockView({
@@ -29,11 +30,11 @@ export default function MathBlockView({
 
   // Render KaTeX HTML for the block formula
   const renderedHtml = useMemo(() => {
-    const trimmed = (latex || '').trim();
-    if (!trimmed) return null;
+    const normalized = normalizeLatex(latex || '');
+    if (!normalized) return null;
     try {
       return {
-        html: katex.renderToString(trimmed, {
+        html: katex.renderToString(normalized, {
           throwOnError: false,
           displayMode: true,
         }),
@@ -49,11 +50,11 @@ export default function MathBlockView({
 
   // Render live preview for the editing draft
   const previewHtml = useMemo(() => {
-    const trimmed = (draftLatex || '').trim();
-    if (!trimmed) return null;
+    const normalized = normalizeLatex(draftLatex || '');
+    if (!normalized) return null;
     try {
       return {
-        html: katex.renderToString(trimmed, {
+        html: katex.renderToString(normalized, {
           throwOnError: true,
           displayMode: true,
         }),
@@ -62,7 +63,7 @@ export default function MathBlockView({
     } catch (err: any) {
       try {
         return {
-          html: katex.renderToString(trimmed, {
+          html: katex.renderToString(normalized, {
             throwOnError: false,
             displayMode: true,
           }),

@@ -1,5 +1,6 @@
 import katex from 'katex';
 import type { MarkedExtension } from 'marked';
+import { normalizeLatex } from './mathExtension';
 
 /**
  * Marked extension to render LaTeX math formulas using KaTeX ($...$ and $$...$$)
@@ -27,7 +28,8 @@ export function createMarkedKatexExtension(): MarkedExtension {
         },
         renderer(token: any) {
           try {
-            return `<div class="katex-display-block py-2 text-center overflow-x-auto">${katex.renderToString(token.text, {
+            const normalized = normalizeLatex(token.text);
+            return `<div class="katex-display-block py-2 text-center overflow-x-auto">${katex.renderToString(normalized, {
               displayMode: true,
               throwOnError: false,
             })}</div>\n`;
@@ -55,7 +57,8 @@ export function createMarkedKatexExtension(): MarkedExtension {
         },
         renderer(token: any) {
           try {
-            return katex.renderToString(token.text, {
+            const normalized = normalizeLatex(token.text);
+            return katex.renderToString(normalized, {
               displayMode: false,
               throwOnError: false,
             });

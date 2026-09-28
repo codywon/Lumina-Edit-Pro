@@ -6,7 +6,7 @@ import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
-import { MathInline, MathBlock } from './mathExtension';
+import { MathInline, MathBlock, normalizeLatex } from './mathExtension';
 import { createMarkedKatexExtension } from './markedKatex';
 import { marked, Marked } from 'marked';
 import katex from 'katex';
@@ -61,12 +61,15 @@ describe('MathExtension: Inline Math ($...$)', () => {
       }
     });
 
+    console.log('EXTRACTED FORMULAS:', formulas);
+
     expect(formulas).toContain('I_e');
     expect(formulas).toContain('P_e');
     expect(formulas).toContain('16\\text{A} \\times 220\\text{V} = 3520\\text{W}');
     expect(formulas).toContain('OI_1');
 
     const outputMd = (editor.storage as any).markdown.getMarkdown();
+    console.log('OUTPUT MD:', outputMd);
     expect(outputMd).toContain('$I_e$');
     expect(outputMd).toContain('$P_e$');
     expect(outputMd).toContain('$16\\text{A} \\times 220\\text{V} = 3520\\text{W}$');
@@ -100,6 +103,31 @@ describe('MathExtension: Inline Math ($...$)', () => {
     });
 
     expect(hasMath).toBe(false);
+    editor.destroy();
+  });
+
+  it('normalizes double-escaped LaTeX commands', () => {
+    expect(normalizeLatex('80^\\\\circ\\\\text{C}')).toBe('80^\\circ\\text{C}');
+    expect(normalizeLatex('16\\\\text{A} \\\\times 220\\\\text{V} = 3520\\\\text{W}')).toBe('16\\text{A} \\times 220\\text{V} = 3520\\text{W}');
+  });
+
+  it('parses inline math with escaped backslashes in user markdown table', () => {
+    const tableMd = `| 额定功率 $P_e$ | W ($16\\\\text{A} \\\\times 220\\\\text{V} = 3520\\\\text{W}$) |
+| 温度 | $80^\\\\circ\\\\text{C}$ |`;
+
+    const editor = createTestEditor(tableMd);
+
+    const formulas: string[] = [];
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'mathInline') {
+        formulas.push(node.attrs.latex);
+      }
+    });
+
+    expect(formulas).toContain('P_e');
+    expect(formulas).toContain('16\\text{A} \\times 220\\text{V} = 3520\\text{W}');
+    expect(formulas).toContain('80^\\circ\\text{C}');
+
     editor.destroy();
   });
 

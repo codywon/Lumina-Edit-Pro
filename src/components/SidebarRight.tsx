@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { AlertTriangle, Check, Copy, Loader2, RefreshCw, Send, Sparkles, StopCircle, Trash2, X } from 'lucide-react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import katex from 'katex';
 import { useAI } from '../contexts/AIContext';
 import { buildPromptMessages } from '../lib/ai/promptBuilder';
 import { summarizeContextWithModel } from '../lib/ai/contextCompression';
@@ -634,6 +635,56 @@ function SidebarRightComponent({
     message.content.trim().length > 0 &&
     message.content.trim() !== EMPTY_RESPONSE_TEXT;
 
+  const renderMathInChild = (child: any): any => {
+    if (typeof child !== 'string') return child;
+    if (!child.includes('$')) return child;
+
+    const mathRegex = /(\$\$[\s\S]+?\$\$|\$[^\s$](?:[^$\n\r]*?[^\s$])?\$)/g;
+    const parts = child.split(mathRegex);
+    if (parts.length <= 1) return child;
+
+    return parts.map((part, index) => {
+      if (part.startsWith('$$') && part.endsWith('$$') && part.length >= 4) {
+        const latex = part.slice(2, -2).trim();
+        try {
+          const html = katex.renderToString(latex, { displayMode: true, throwOnError: false });
+          return (
+            <span
+              key={index}
+              className="katex-display-inline block my-1 text-center overflow-x-auto"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          );
+        } catch {
+          return (
+            <span key={index} className="text-rose-500 font-mono text-xs">
+              {part}
+            </span>
+          );
+        }
+      } else if (part.startsWith('$') && part.endsWith('$') && part.length >= 3) {
+        const latex = part.slice(1, -1).trim();
+        try {
+          const html = katex.renderToString(latex, { displayMode: false, throwOnError: false });
+          return (
+            <span
+              key={index}
+              className="katex-inline-render inline align-baseline"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          );
+        } catch {
+          return (
+            <span key={index} className="text-rose-500 font-mono text-xs">
+              {part}
+            </span>
+          );
+        }
+      }
+      return part;
+    });
+  };
+
   const markdownComponents = useMemo(
     () => ({
       img: ({ src, alt, title }: any) => {
@@ -662,6 +713,22 @@ function SidebarRightComponent({
       code: ({ node, inline, className, children, ...props }: any) => {
         const match = /language-(\w+)/.exec(className || '');
         const codeString = String(children).replace(/\n$/, '');
+        const lang = match ? match[1].toLowerCase() : '';
+
+        if (!inline && (lang === 'math' || lang === 'latex' || lang === 'katex')) {
+          try {
+            const html = katex.renderToString(codeString, { displayMode: true, throwOnError: false });
+            return (
+              <div
+                className="my-2 py-2 overflow-x-auto text-center"
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+            );
+          } catch {
+            // fallback to code block
+          }
+        }
+
         if (!inline && (match || codeString.includes('\n'))) {
           return (
             <CodeBlockWithCopy language={match ? match[1] : 'code'} code={codeString}>
@@ -677,16 +744,28 @@ function SidebarRightComponent({
           </code>
         );
       },
+      p: ({ children }: any) => {
+        const processed = React.Children.map(children, renderMathInChild);
+        return <p className="mb-2 leading-relaxed">{processed}</p>;
+      },
+      li: ({ children }: any) => {
+        const processed = React.Children.map(children, renderMathInChild);
+        return <li className="my-0.5">{processed}</li>;
+      },
       table: ({ children }: any) => (
         <div className="overflow-x-auto my-2 rounded-lg border border-slate-200 dark:border-white/10 custom-scrollbar">
           <table className="w-full text-xs text-left border-collapse">{children}</table>
         </div>
       ),
       th: ({ children }: any) => (
-        <th className="bg-slate-100 dark:bg-[#18181B] font-semibold px-2.5 py-1.5 border-b border-slate-200 dark:border-[#27272A]">{children}</th>
+        <th className="bg-slate-100 dark:bg-[#18181B] font-semibold px-2.5 py-1.5 border-b border-slate-200 dark:border-[#27272A]">
+          {React.Children.map(children, renderMathInChild)}
+        </th>
       ),
       td: ({ children }: any) => (
-        <td className="px-2.5 py-1.5 border-b border-slate-100 dark:border-[#202024]">{children}</td>
+        <td className="px-2.5 py-1.5 border-b border-slate-100 dark:border-[#202024]">
+          {React.Children.map(children, renderMathInChild)}
+        </td>
       ),
     }),
     []

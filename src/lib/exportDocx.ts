@@ -285,6 +285,13 @@ export function generateDocxBytes(
         const tag = el.tagName.toLowerCase();
         if (tag === 'strong' || tag === 'b') {
           out += renderInlineNodes(el.childNodes, { ...fmt, bold: true });
+        } else if (el.classList.contains('katex') || el.classList.contains('katex-display-block') || el.classList.contains('math-inline') || el.hasAttribute('data-latex')) {
+          const tex =
+            el.getAttribute('data-latex') ||
+            el.querySelector('annotation[encoding="application/x-tex"]')?.textContent?.trim() ||
+            el.textContent?.trim() ||
+            '';
+          out += renderRun(tex, { ...fmt, italic: true, fontAscii: 'Cambria Math' });
         } else if (tag === 'em' || tag === 'i') {
           out += renderInlineNodes(el.childNodes, { ...fmt, italic: true });
         } else if (tag === 'del' || tag === 's') {

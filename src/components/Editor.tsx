@@ -12,7 +12,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Highlight from '@tiptap/extension-highlight';
 import { common, createLowlight } from 'lowlight';
-import { Bold, Italic, List, Link, Image as ImageIcon, Code, Code2, Columns, Heading as HeadingIcon, Quote, Table as TableIcon, ListOrdered, Strikethrough, SlidersHorizontal, ChevronDown, ChevronUp, Rows, Eye, Focus, Minus, Loader2, X, Check, Highlighter, CheckSquare, Sparkles, Send, Copy, RotateCcw } from 'lucide-react';
+import { Bold, Italic, List, Link, Image as ImageIcon, Code, Code2, Columns, Heading as HeadingIcon, Quote, Table as TableIcon, ListOrdered, Strikethrough, SlidersHorizontal, ChevronDown, ChevronUp, Rows, Eye, Focus, Minus, Loader2, X, Check, Highlighter, CheckSquare, Sparkles, Send, Copy, RotateCcw, Sigma } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { formatPanguSpacing } from '../lib/pangu';
 import { useSettings } from '../contexts/SettingsContext';
@@ -150,8 +150,10 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
   const [showTablePaddingMenu, setShowTablePaddingMenu] = useState(false);
   const [showHeadingMenu, setShowHeadingMenu] = useState(false);
   const [showTableMenu, setShowTableMenu] = useState(false);
+  const [showMathMenu, setShowMathMenu] = useState(false);
   const headingMenuRef = useRef<HTMLDivElement | null>(null);
   const tableMenuRef = useRef<HTMLDivElement | null>(null);
+  const mathMenuRef = useRef<HTMLDivElement | null>(null);
   const lineHeightMenuRef = useRef<HTMLDivElement | null>(null);
   const tablePaddingMenuRef = useRef<HTMLDivElement | null>(null);
   const editorViewportRef = useRef<HTMLDivElement | null>(null);
@@ -185,7 +187,7 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
   const lastScrollRatioRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!showHeadingMenu && !showTableMenu && !showLineHeightMenu && !showTablePaddingMenu) {
+    if (!showHeadingMenu && !showTableMenu && !showLineHeightMenu && !showTablePaddingMenu && !showMathMenu) {
       return;
     }
 
@@ -194,12 +196,14 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
       const inside =
         headingMenuRef.current?.contains(target) ||
         tableMenuRef.current?.contains(target) ||
+        mathMenuRef.current?.contains(target) ||
         lineHeightMenuRef.current?.contains(target) ||
         tablePaddingMenuRef.current?.contains(target);
 
       if (!inside) {
         setShowHeadingMenu(false);
         setShowTableMenu(false);
+        setShowMathMenu(false);
         setShowLineHeightMenu(false);
         setShowTablePaddingMenu(false);
       }
@@ -209,6 +213,7 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
       if (event.key === 'Escape') {
         setShowHeadingMenu(false);
         setShowTableMenu(false);
+        setShowMathMenu(false);
         setShowLineHeightMenu(false);
         setShowTablePaddingMenu(false);
       }
@@ -534,6 +539,12 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
   const handleHeading1 = () => editor.chain().focus().toggleHeading({ level: 1 }).run();
   const handleHeading2 = () => editor.chain().focus().toggleHeading({ level: 2 }).run();
   const handleQuote = () => editor.chain().focus().toggleBlockquote().run();
+  const handleInsertMathInline = () => {
+    editor.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: 'x' } }).run();
+  };
+  const handleInsertMathBlock = () => {
+    editor.chain().focus().insertContent({ type: 'mathBlock', attrs: { latex: '' } }).run();
+  };
   const handleTable = () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   const handleAddRowBefore = () => editor.chain().focus().addRowBefore().run();
   const handleAddRowAfter = () => editor.chain().focus().addRowAfter().run();
@@ -711,6 +722,18 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'h' || event.key === 'H') && !event.altKey) {
         event.preventDefault();
         handleHighlight();
+        return;
+      }
+
+      // Typora formula shortcuts
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'm' || event.key === 'M') && !event.altKey) {
+        event.preventDefault();
+        handleInsertMathBlock();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && (event.key === 'm' || event.key === 'M') && !event.altKey) {
+        event.preventDefault();
+        handleInsertMathInline();
         return;
       }
 
@@ -1015,6 +1038,53 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
           <button onClick={handleTaskList} className={cn("p-1.5 rounded transition-colors", editor.isActive('taskList') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="待办任务清单"><CheckSquare size={16} /></button>
           <button onClick={handleQuote} className={cn("p-1.5 rounded transition-colors", editor.isActive('blockquote') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="引用"><Quote size={16} /></button>
           <button onClick={handleCode} className={cn("p-1.5 rounded transition-colors", editor.isActive('codeBlock') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="代码块"><Code2 size={16} /></button>
+          
+          <div className="relative" ref={mathMenuRef}>
+            <button
+              onClick={() => {
+                setShowMathMenu(!showMathMenu);
+                setShowTableMenu(false);
+                setShowHeadingMenu(false);
+                setShowLineHeightMenu(false);
+                setShowTablePaddingMenu(false);
+              }}
+              className={cn(
+                "flex items-center gap-0.5 p-1.5 rounded transition-colors",
+                editor.isActive('mathBlock') || editor.isActive('mathInline')
+                  ? "bg-accent-soft text-accent"
+                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]"
+              )}
+              title="数学公式 (Ctrl+Shift+M / Ctrl+M)"
+            >
+              <Sigma size={16} />
+              <ChevronDown size={10} />
+            </button>
+            {showMathMenu && (
+              <div className="absolute top-full left-0 mt-1 p-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg shadow-xl z-50 w-44">
+                <button
+                  onClick={() => {
+                    handleInsertMathInline();
+                    setShowMathMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between text-slate-700 dark:text-slate-200"
+                >
+                  <span>行内公式 ($...$)</span>
+                  <span className="text-[10px] text-slate-400">Ctrl+M</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleInsertMathBlock();
+                    setShowMathMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between text-slate-700 dark:text-slate-200"
+                >
+                  <span>公式块 ($$...$$)</span>
+                  <span className="text-[10px] text-slate-400">Ctrl+Shift+M</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button onClick={handleHorizontalRule} className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] rounded transition-colors" title="分割线"><Minus size={16} /></button>
           <div className="relative" ref={tableMenuRef}>
             <button

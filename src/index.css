@@ -516,6 +516,48 @@ body,
     background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.07);
   }
 
+  /* KaTeX Math Formula Typography & Table Integration */
+  .math-inline-wrapper {
+    display: inline-flex;
+    vertical-align: baseline;
+    line-height: inherit;
+  }
+
+  .math-inline-wrapper .katex {
+    font-size: 1.05em;
+    line-height: inherit;
+    text-rendering: auto;
+  }
+
+  /* Table cells KaTeX formulas: compact, vertically aligned, no overflow cut-offs */
+  .prose-custom td .math-inline-wrapper,
+  .prose-custom th .math-inline-wrapper,
+  .tiptap td .math-inline-wrapper,
+  .tiptap th .math-inline-wrapper {
+    font-size: 0.95em;
+    white-space: nowrap;
+    vertical-align: baseline;
+  }
+
+  .dark .katex {
+    color: #f1f5f9;
+  }
+
+  .dark .katex-html {
+    color: inherit;
+  }
+
+  /* Math Block Styling */
+  .math-block-wrapper {
+    margin: 1.25rem 0;
+    user-select: text;
+  }
+
+  .math-block-wrapper .katex-display {
+    margin: 0;
+    padding: 0.5rem 0;
+  }
+
   /* ProseMirror table column resize handle (visible, high-contrast, responsive) */
   .ProseMirror .column-resize-handle {
     position: absolute;
@@ -1188,7 +1230,22 @@ body,
       break-after: avoid;
     }
 
-    table, pre, img {
+    .math-block-wrapper {
+      border: 1px solid #e2e8f0 !important;
+      box-shadow: none !important;
+      break-inside: avoid;
+      background: transparent !important;
+    }
+
+    .math-block-wrapper .select-none {
+      display: none !important;
+    }
+
+    .math-popover {
+      display: none !important;
+    }
+
+    table, pre, img, .math-block-wrapper {
       break-inside: avoid;
     }
   }

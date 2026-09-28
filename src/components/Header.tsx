@@ -3,7 +3,10 @@ import { Sparkles, Search, ChevronUp, ChevronDown, Minus, Square, X } from 'luci
 import { cn } from '../lib/utils';
 import { useSettings } from '../contexts/SettingsContext';
 import { marked } from 'marked';
+import { createMarkedKatexExtension } from '../lib/markedKatex';
 import BrandIcon from './BrandIcon';
+
+marked.use(createMarkedKatexExtension());
 import { formatPanguSpacing } from '../lib/pangu';
 import { exportElementToLongImage } from '../lib/exportImage';
 import { exportMarkdownToDocx } from '../lib/exportDocx';
@@ -396,6 +399,8 @@ function HeaderComponent({
           },
         },
         { label: '代码块', shortcut: settings.shortcuts.codeBlock, action: () => editor?.chain().focus().toggleCodeBlock().run() },
+        { label: '数学公式块', shortcut: 'Ctrl+Shift+M', action: () => editor?.chain().focus().insertContent({ type: 'mathBlock', attrs: { latex: '' } }).run() },
+        { label: '行内公式', shortcut: 'Ctrl+M', action: () => editor?.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: 'x' } }).run() },
         { label: '待办清单', action: () => editor?.chain().focus().toggleTaskList().run() },
         { label: '分割线', action: () => editor?.chain().focus().setHorizontalRule().run() },
       ],
@@ -408,6 +413,8 @@ function HeaderComponent({
         { label: '删除线', shortcut: settings.shortcuts.strike, action: () => editor?.chain().focus().toggleStrike().run() },
         { label: '文本高亮', action: () => editor?.chain().focus().toggleHighlight().run() },
         { label: '行内代码', shortcut: settings.shortcuts.inlineCode, action: () => editor?.chain().focus().toggleCode().run() },
+        { label: '行内公式', shortcut: 'Ctrl+M', action: () => editor?.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: 'x' } }).run() },
+        { label: '数学公式块', shortcut: 'Ctrl+Shift+M', action: () => editor?.chain().focus().insertContent({ type: 'mathBlock', attrs: { latex: '' } }).run() },
         { label: '引用', shortcut: settings.shortcuts.blockquote, action: () => editor?.chain().focus().toggleBlockquote().run() },
         { label: '分割线', action: () => editor?.chain().focus().setHorizontalRule().run() },
         { label: '无序列表', shortcut: settings.shortcuts.unorderedList, action: () => editor?.chain().focus().toggleBulletList().run() },

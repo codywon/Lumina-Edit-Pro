@@ -22,6 +22,7 @@ import CodeBlockComponent from './components/CodeBlockComponent';
 import ResizableImageComponent from './components/ResizableImageComponent';
 import { CalloutExtension } from './lib/calloutExtension';
 import { TocExtension } from './lib/tocExtension';
+import { MathInline, MathBlock } from './lib/mathExtension';
 import { AlertTriangle } from 'lucide-react';
 import { isTauriRuntime } from './services/native/environment';
 import { getNativeFileMtime, readNativeFile } from './services/workspace/client';
@@ -890,6 +891,8 @@ function AppContent() {
     TableCell,
     TaskList,
     TaskItem.configure({ nested: true }),
+    MathInline,
+    MathBlock,
     CalloutExtension,
     TocExtension,
   ], []);

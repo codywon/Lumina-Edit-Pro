@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
@@ -58,6 +59,27 @@ pub struct NativeRecentWorkspace {
 pub struct DefaultEditorResult {
     pub success: bool,
     pub message: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentExeInfo {
+    pub exe_path: String,
+    pub exe_dir: String,
+    pub exe_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateWriteChunkPayload {
+    pub chunk: Vec<u8>,
+    pub is_first: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSaveAsPayload {
+    pub target_path: String,
 }
 
 // Payloads
@@ -611,6 +633,135 @@ fn workspace_write_binary(payload: WorkspaceBinaryPayload) -> Result<(), String>
 
 const EMBEDDED_USER_MANUAL_HTML: &str = include_str!("../../docs/用户手册.html");
 
+fn cleanup_old_executable() {
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(parent) = current_exe.parent() {
+            let file_name = current_exe.file_name().unwrap_or_default().to_string_lossy();
+            let old_file = parent.join(format!("{}.old", file_name));
+            if old_file.exists() {
+                let _ = fs::remove_file(old_file);
+            }
+            let new_file = parent.join(format!("{}.new", file_name));
+            if new_file.exists() {
+                let _ = fs::remove_file(new_file);
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn app_get_exe_info() -> Result<CurrentExeInfo, String> {
+    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let parent = current_exe.parent().ok_or("无法获取当前可执行文件目录")?;
+    let file_name = current_exe.file_name().ok_or("无法获取当前可执行文件名")?;
+
+    Ok(CurrentExeInfo {
+        exe_path: current_exe.to_string_lossy().to_string(),
+        exe_dir: parent.to_string_lossy().to_string(),
+        exe_name: file_name.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+fn app_write_update_chunk(payload: UpdateWriteChunkPayload) -> Result<(), String> {
+    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let parent = current_exe.parent().ok_or("无法获取当前可执行文件目录")?;
+    let file_name = current_exe.file_name().ok_or("无法获取当前可执行文件名")?;
+    let temp_new_exe = parent.join(format!("{}.new", file_name.to_string_lossy()));
+
+    if payload.is_first && temp_new_exe.exists() {
+        let _ = fs::remove_file(&temp_new_exe);
+    }
+
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&temp_new_exe)
+        .map_err(|e| format!("无法写入更新临时文件（请检查所在文件夹是否有写入权限）：{}", e))?;
+
+    file.write_all(&payload.chunk)
+        .map_err(|e| format!("写入更新数据块失败：{}", e))
+}
+
+#[tauri::command]
+fn app_cancel_update() -> Result<(), String> {
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(parent) = current_exe.parent() {
+            let file_name = current_exe.file_name().unwrap_or_default().to_string_lossy();
+            let temp_new_exe = parent.join(format!("{}.new", file_name));
+            if temp_new_exe.exists() {
+                let _ = fs::remove_file(temp_new_exe);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn app_save_update_as(payload: UpdateSaveAsPayload) -> Result<(), String> {
+    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let parent = current_exe.parent().ok_or("无法获取当前可执行文件目录")?;
+    let file_name = current_exe.file_name().ok_or("无法获取当前可执行文件名")?;
+    let temp_new_exe = parent.join(format!("{}.new", file_name.to_string_lossy()));
+
+    if !temp_new_exe.is_file() {
+        return Err("未找到已下载的新版本文件".to_string());
+    }
+
+    fs::copy(&temp_new_exe, &payload.target_path)
+        .map_err(|e| format!("另存为新版本失败：{}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn app_apply_update_and_restart() -> Result<(), String> {
+    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let parent = current_exe.parent().ok_or("无法获取当前可执行文件目录")?;
+    let file_name = current_exe.file_name().ok_or("无法获取当前可执行文件名")?;
+    let file_name_str = file_name.to_string_lossy().to_string();
+
+    let temp_new_exe = parent.join(format!("{}.new", file_name_str));
+    if !temp_new_exe.is_file() {
+        return Err("未找到已下载的新版本二进制文件，请重新下载".to_string());
+    }
+
+    let old_backup_exe = parent.join(format!("{}.old", file_name_str));
+    if old_backup_exe.exists() {
+        let _ = fs::remove_file(&old_backup_exe);
+    }
+
+    // Step 1: 原子重命名正在运行的当前 exe -> .old
+    fs::rename(&current_exe, &old_backup_exe)
+        .map_err(|e| format!("重命名旧版本失败（可能需要管理员权限或移动到可写目录）：{}", e))?;
+
+    // Step 2: 将已下载好的 .new 重命名为原名称
+    if let Err(e) = fs::rename(&temp_new_exe, &current_exe) {
+        // 出错时自动安全回滚
+        let _ = fs::rename(&old_backup_exe, &current_exe);
+        return Err(format!("置换新版本失败，已安全恢复旧版本：{}", e));
+    }
+
+    // Step 3: 拉起全新的可执行文件
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = std::process::Command::new(&current_exe);
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW for launcher
+        if let Err(e) = cmd.spawn() {
+            return Err(format!("新版本已成功替换，但自动拉起新进程失败，请手动双击启动：{}", e));
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Err(e) = std::process::Command::new(&current_exe).spawn() {
+            return Err(format!("新版本已成功替换，但自动拉起新进程失败，请手动双击启动：{}", e));
+        }
+    }
+
+    // Step 4: 当前旧进程安全退出
+    std::process::exit(0);
+}
+
 #[tauri::command]
 fn app_open_user_manual() -> Result<(), String> {
     let temp_file = std::env::temp_dir().join("Lumina-Edit-Pro-用户手册.html");
@@ -646,6 +797,9 @@ fn app_open_user_manual() -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 启动时静默清理上次更新遗留的 .old 和 .new 临时文件
+    cleanup_old_executable();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
@@ -661,6 +815,11 @@ pub fn run() {
             app_get_cli_open_file,
             app_set_as_default_editor,
             app_open_default_apps_settings,
+            app_get_exe_info,
+            app_write_update_chunk,
+            app_cancel_update,
+            app_save_update_as,
+            app_apply_update_and_restart,
             file_mtime,
             file_read,
             file_write,

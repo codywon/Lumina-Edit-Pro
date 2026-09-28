@@ -35,6 +35,7 @@ import Footer from './components/Footer';
 import SettingsModal from './components/SettingsModal';
 import AICenterModal from './components/AICenterModal';
 import AboutModal from './components/AboutModal';
+import UpdateModal from './components/UpdateModal';
 import UserManualModal from './components/UserManualModal';
 import ExportModal from './components/ExportModal';
 import TimelineModal from './components/TimelineModal';
@@ -46,6 +47,7 @@ import { useSettings, SettingsProvider } from './contexts/SettingsContext';
 import { matchShortcut } from './lib/shortcuts';
 import { clearWorkspaceHandle, loadWorkspaceHandle, saveWorkspaceHandle } from './lib/workspacePersistence';
 import { AIProvider } from './contexts/AIContext';
+import { checkForUpdate, type ReleaseInfo } from './services/updater';
 import {
   openFile,
   openDirectory,
@@ -535,6 +537,9 @@ function AppContent() {
   const [isAICenterOpen, setIsAICenterOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [latestReleaseInfo, setLatestReleaseInfo] = useState<ReleaseInfo | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isExportDocxModalOpen, setIsExportDocxModalOpen] = useState(false);
   const [isTimelineOpen, setIsTimelineOpen] = useState(false);
   const [isQuickOpenVisible, setIsQuickOpenVisible] = useState(false);
@@ -1298,7 +1303,45 @@ function AppContent() {
     },
   });
 
-  // Sync content from editor to state is handled in onUpdate
+  const handleCheckUpdate = async (isManual = true) => {
+    if (isCheckingUpdate) return;
+    setIsCheckingUpdate(true);
+    if (isManual) {
+      showToast('正在检查最新版本...', 'info');
+    }
+    try {
+      const result = await checkForUpdate({
+        feedUrl: settings.updateFeedUrl,
+        githubToken: settings.githubToken,
+      });
+
+      if (result.hasUpdate && result.latestRelease) {
+        setLatestReleaseInfo(result.latestRelease);
+        setIsUpdateModalOpen(true);
+      } else if (isManual) {
+        if (result.error) {
+          showToast(result.error, 'warning');
+        } else {
+          showToast(`当前已是最新版本 (v${result.currentVersion})`, 'info');
+        }
+      }
+    } catch (err: any) {
+      if (isManual) {
+        showToast(err?.message || '检查更新失败，请检查网络', 'error');
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  useEffect(() => {
+    if (settings.autoCheckUpdate !== false) {
+      const timer = setTimeout(() => {
+        void handleCheckUpdate(false);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [settings.autoCheckUpdate]);
   // Sync content from state to editor (for file opens)
   useEffect(() => {
     if (editor && !editor.isFocused && !isUpdatingFromEditorRef.current) {
@@ -2608,6 +2651,7 @@ function AppContent() {
           onOpenManual={() => setIsManualOpen(true)}
           onOpenExportDocx={() => setIsExportDocxModalOpen(true)}
           onOpenTimeline={() => setIsTimelineOpen(true)}
+          onCheckUpdate={() => void handleCheckUpdate(true)}
           onToggleFullscreen={handleToggleFullscreen}
           onToggleFocusMode={handleToggleFocusMode}
           onWindowMinimize={handleWindowMinimize}
@@ -2800,12 +2844,23 @@ function AppContent() {
         />
       )}
 
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onCheckUpdate={() => void handleCheckUpdate(true)}
+      />
       <AICenterModal isOpen={isAICenterOpen} onClose={() => setIsAICenterOpen(false)} />
       <AboutModal
         isOpen={isAboutOpen}
         onClose={() => setIsAboutOpen(false)}
         onOpenManual={() => setIsManualOpen(true)}
+        onCheckUpdate={() => void handleCheckUpdate(true)}
+      />
+      <UpdateModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        release={latestReleaseInfo}
+        showToast={showToast}
       />
       <UserManualModal
         isOpen={isManualOpen}

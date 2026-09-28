@@ -27,6 +27,9 @@ interface Settings {
   // Features
   enableAI: boolean;
   spellCheck: boolean;
+  autoCheckUpdate: boolean;
+  updateFeedUrl: string;
+  githubToken: string;
 
   // Shortcuts
   shortcuts: Record<ShortcutAction, string>;
@@ -50,6 +53,9 @@ const defaultSettings: Settings = {
   imageStoragePath: '${filename}.assets',
   enableAI: true,
   spellCheck: true,
+  autoCheckUpdate: true,
+  updateFeedUrl: '',
+  githubToken: '',
   shortcuts: DEFAULT_SHORTCUTS,
 };
 

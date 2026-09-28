@@ -11,9 +11,10 @@ import { openNativeDefaultAppsSettings, setNativeAsDefaultEditor } from '../serv
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onCheckUpdate?: () => void;
 }
 
-export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export default function SettingsModal({ isOpen, onClose, onCheckUpdate }: SettingsModalProps) {
   const { theme, setTheme } = useTheme();
   const { settings, updateSettings, resetSettings } = useSettings();
   const [activeTab, setActiveTab] = React.useState('appearance');
@@ -542,6 +543,33 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         description="自动标记可能的拼写错误"
                         checked={settings.spellCheck}
                         onChange={(val) => updateSettings({ spellCheck: val })}
+                      />
+                    </section>
+
+                    <section className="space-y-4 pt-4 border-t border-slate-200 dark:border-white/10">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white">版本与在线更新</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">当前版本：v1.0.0 (Release)</p>
+                        </div>
+                        {onCheckUpdate && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onCheckUpdate();
+                            }}
+                            className="px-3 py-1.5 bg-accent hover:bg-accent/90 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+                          >
+                            立即检查更新
+                          </button>
+                        )}
+                      </div>
+                      <Toggle
+                        label="启动时自动检查更新"
+                        description="在应用启动后静默检测最新版本，发现新版时弹出更新提醒"
+                        checked={settings.autoCheckUpdate ?? true}
+                        onChange={(val) => updateSettings({ autoCheckUpdate: val })}
                       />
                     </section>
                   </div>

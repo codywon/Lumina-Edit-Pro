@@ -48,6 +48,7 @@ interface HeaderProps {
   onOpenManual?: () => void;
   onOpenExportDocx?: () => void;
   onOpenTimeline?: () => void;
+  onCheckUpdate?: () => void;
 }
 
 function HeaderComponent({ 
@@ -85,7 +86,8 @@ function HeaderComponent({
   onOpenReplace,
   onOpenManual,
   onOpenExportDocx,
-  onOpenTimeline
+  onOpenTimeline,
+  onCheckUpdate,
 }: HeaderProps) {
   const { settings } = useSettings();
   const handlePanguSpacing = () => {
@@ -437,6 +439,7 @@ function HeaderComponent({
     {
       label: '帮助',
       items: [
+        { label: '检查更新...', action: () => onCheckUpdate?.() },
         { label: '操作手册', action: () => onOpenManual?.() },
         { label: '关于', action: onOpenAbout },
       ],

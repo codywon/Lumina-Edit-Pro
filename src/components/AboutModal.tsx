@@ -6,9 +6,10 @@ interface AboutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenManual?: () => void;
+  onCheckUpdate?: () => void;
 }
 
-export default function AboutModal({ isOpen, onClose, onOpenManual }: AboutModalProps) {
+export default function AboutModal({ isOpen, onClose, onOpenManual, onCheckUpdate }: AboutModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -46,7 +47,21 @@ export default function AboutModal({ isOpen, onClose, onOpenManual }: AboutModal
               <div className="space-y-4 mb-8">
                 <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#27272A] border border-slate-100 dark:border-white/5">
                   <span className="text-xs text-slate-500 dark:text-slate-400">当前版本</span>
-                  <span className="text-xs font-bold text-accent">v1.0.0 (Stable)</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-accent">v1.0.0 (Release)</span>
+                    {onCheckUpdate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onCheckUpdate();
+                        }}
+                        className="text-[11px] px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 text-accent font-semibold transition-colors"
+                      >
+                        检查更新
+                      </button>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-1 gap-3">

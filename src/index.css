@@ -416,13 +416,13 @@ body,
     color: #1f2328;
     border-bottom: 2px solid #d0d7de;
     border-right: 1px solid #d0d7de;
-    padding: var(--table-row-padding, 0.6rem) 0.95rem !important;
+    padding: var(--table-row-padding, 0.55rem) 0.8rem !important;
     text-align: left;
     vertical-align: middle;
     position: relative !important;
     box-sizing: border-box;
     white-space: nowrap; /* Keep header concise on one line */
-    min-width: 80px;
+    min-width: 48px;
   }
 
   .dark .prose-custom th,
@@ -436,25 +436,17 @@ body,
   .tiptap td {
     border-bottom: 1px solid #e1e4e8;
     border-right: 1px solid #e1e4e8;
-    padding: var(--table-row-padding, 0.6rem) 0.95rem !important;
+    padding: var(--table-row-padding, 0.55rem) 0.8rem !important;
     vertical-align: top;
     position: relative !important;
     box-sizing: border-box;
     overflow-wrap: break-word;
     word-break: keep-all; /* Critical: keeps CJK words/phrases intact, eliminates 1-char orphan breaks like '认)' or '小' */
-    min-width: 80px;
+    min-width: 48px;
     line-height: 1.6;
   }
 
-  /* First column (parameters, labels, gears) gets comfortable min-width to avoid cramping */
-  .prose-custom th:first-child,
-  .prose-custom td:first-child,
-  .tiptap th:first-child,
-  .tiptap td:first-child {
-    min-width: 95px;
-  }
-
-  /* Short code keywords in table cells wrap naturally without breaking columns */
+  /* Short code keywords in table cells maintain atomic integrity without breaking words */
   .prose-custom td code,
   .prose-custom th code,
   .tiptap td code,
@@ -465,11 +457,10 @@ body,
     background-color: rgba(175, 184, 193, 0.18) !important;
     border: 1px solid rgba(175, 184, 193, 0.22) !important;
     color: #1f2328 !important;
-    white-space: pre-wrap !important;
-    word-break: break-word !important;
-    overflow-wrap: anywhere !important;
+    white-space: nowrap !important; /* Critical: preserves atomic identifiers, prevents ugly breaks like 'devi'/'ce_id' or 'peop'/'le' */
     display: inline;
     line-height: 1.35;
+    vertical-align: baseline;
   }
 
   .dark .prose-custom td code,

@@ -888,7 +888,7 @@ function AppContent() {
     Table.configure({
       resizable: true,
       handleWidth: 7,
-      cellMinWidth: 60,
+      cellMinWidth: 48,
       lastColumnResizable: true,
     }),
     TableRow,

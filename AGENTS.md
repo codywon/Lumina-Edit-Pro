@@ -71,13 +71,12 @@
 ### 法则三：设立列宽呼吸底线（Min-Width Safeguards）
 
 - 避免短信息列被长文本列挤压至不足以显示简短词组：
-  - **首列底线**：`th:first-child, td:first-child { min-width: 95px; }`（通常为参数、档位、属性、字段名）；
-  - **通用列底线**：`th, td { min-width: 80px; }`；
-  - **舒展内边距**：`padding: var(--table-row-padding, 0.6rem) 0.95rem !important;`。
+  - **弹性列底线**：`th, td { min-width: 48px; }`（自适应容纳序号、标识符、状态，不浪费空间）；
+  - **舒展内边距**：`padding: var(--table-row-padding, 0.55rem) 0.8rem !important;`。
 
-### 法则四：单元格内代码块（Code Chips）微米级精致化
+### 法则四：单元格内代码块（Code Chips）原子完整性规范（Atomic Code Integrity）
 
-- 单元格内的代码块必须轻量紧凑，不能使用正文大药丸的粗大样式：
+- 单元格内的代码块必须轻量紧凑，且**严禁中途拆词折断**（如严禁将 `device_id` 拆成 `devi` 和 `ce_id`，将 `people` 拆成 `peop` 和 `le`）：
 
 ```css
 .prose-custom td code,
@@ -89,9 +88,7 @@
   border-radius: 4px !important;
   background-color: rgba(175, 184, 193, 0.18) !important;
   border: 1px solid rgba(175, 184, 193, 0.22) !important;
-  white-space: pre-wrap !important;
-  word-break: break-word !important;
-  overflow-wrap: anywhere !important;
+  white-space: nowrap !important; /* 关键：代码标识符原子完整，禁止拆词折断 */
   display: inline !important;
   line-height: 1.35 !important;
 }

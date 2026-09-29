@@ -70,6 +70,17 @@ function createCalloutDecorations(doc: any): DecorationSet {
   return DecorationSet.create(doc, decorations);
 }
 
+function checkDocHasBlockquotes(doc: any): boolean {
+  let has = false;
+  doc.descendants((node: any) => {
+    if (node.type.name === 'blockquote') {
+      has = true;
+      return false;
+    }
+  });
+  return has;
+}
+
 export const CalloutExtension = Extension.create({
   name: 'calloutBlocks',
 
@@ -81,10 +92,37 @@ export const CalloutExtension = Extension.create({
           init(_, { doc }) {
             return createCalloutDecorations(doc);
           },
-          apply(tr, oldSet, _, newState) {
+          apply(tr, oldSet, oldState, newState) {
             if (!tr.docChanged) {
               return oldSet.map(tr.mapping, tr.doc);
             }
+
+            // High performance fast-path: if neither old nor new document contains blockquotes, bypass walk in O(1)
+            const oldHas = checkDocHasBlockquotes(oldState.doc);
+            const newHas = checkDocHasBlockquotes(newState.doc);
+            if (!oldHas && !newHas) {
+              return DecorationSet.empty;
+            }
+
+            // If user is just typing inside normal text outside of blockquotes, map existing decorations in O(1)
+            let touchesBlockquote = false;
+            tr.steps.forEach((step: any) => {
+              if (step.from !== undefined && step.to !== undefined) {
+                const safePos = Math.min(step.from, newState.doc.content.size);
+                const $pos = newState.doc.resolve(safePos);
+                for (let d = $pos.depth; d > 0; d--) {
+                  if ($pos.node(d).type.name === 'blockquote') {
+                    touchesBlockquote = true;
+                    break;
+                  }
+                }
+              }
+            });
+
+            if (!touchesBlockquote && oldHas && newHas) {
+              return oldSet.map(tr.mapping, newState.doc);
+            }
+
             return createCalloutDecorations(newState.doc);
           },
         },

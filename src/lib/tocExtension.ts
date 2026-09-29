@@ -138,6 +138,39 @@ function createTocDecorations(doc: any, view?: any): DecorationSet {
   return DecorationSet.create(doc, decorations);
 }
 
+function checkDocHasTocMarker(doc: any): boolean {
+  let has = false;
+  doc.descendants((node: any) => {
+    if (node.type.name === 'paragraph') {
+      const text = (node.textContent || '').trim();
+      if (/^\[(TOC|toc)\]$/i.test(text)) {
+        has = true;
+        return false;
+      }
+    }
+  });
+  return has;
+}
+
+function checkTransactionTouchesHeadingsOrToc(tr: any, state: any): boolean {
+  let touched = false;
+  tr.steps.forEach((step: any) => {
+    if (step.from !== undefined && step.to !== undefined) {
+      const safePos = Math.min(step.from, state.doc.content.size);
+      const $pos = state.doc.resolve(safePos);
+      for (let d = $pos.depth; d > 0; d--) {
+        const typeName = $pos.node(d).type.name;
+        if (typeName === 'heading' || typeName === 'paragraph') {
+          // If it's a heading or could be editing [TOC]
+          touched = true;
+          return;
+        }
+      }
+    }
+  });
+  return touched;
+}
+
 export const TocExtension = Extension.create({
   name: 'tocExtension',
 
@@ -153,12 +186,23 @@ export const TocExtension = Extension.create({
         },
         state: {
           init(_, { doc }) {
+            if (!checkDocHasTocMarker(doc)) {
+              return DecorationSet.empty;
+            }
             return createTocDecorations(doc);
           },
-          apply(tr, oldSet, _, newState) {
+          apply(tr, oldSet, oldState, newState) {
             if (!tr.docChanged) {
               return oldSet.map(tr.mapping, tr.doc);
             }
+
+            // High performance fast path: if document has no [TOC] marker, bypass full document scan in O(1)
+            const oldHas = checkDocHasTocMarker(oldState.doc);
+            const newHas = checkDocHasTocMarker(newState.doc);
+            if (!oldHas && !newHas) {
+              return DecorationSet.empty;
+            }
+
             return createTocDecorations(newState.doc, editorView);
           },
         },

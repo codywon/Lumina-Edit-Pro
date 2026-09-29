@@ -122,6 +122,31 @@ body,
     color: #e6edf3;
   }
 
+  /* Hardware-accelerated virtual layout for ultra-long documents (100k+ words) */
+  .prose-custom > p,
+  .prose-custom > blockquote,
+  .prose-custom > .tableWrapper,
+  .prose-custom > .code-block,
+  .prose-custom > .math-block-wrapper,
+  .tiptap > p,
+  .tiptap > blockquote,
+  .tiptap > .tableWrapper,
+  .tiptap > .code-block,
+  .tiptap > .math-block-wrapper {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 36px;
+  }
+
+  .prose-custom > .tableWrapper,
+  .tiptap > .tableWrapper {
+    contain-intrinsic-size: auto 120px;
+  }
+
+  .prose-custom > .code-block,
+  .tiptap > .code-block {
+    contain-intrinsic-size: auto 90px;
+  }
+
   .prose-custom h1 {
     font-size: 2.15em;
     font-weight: 700;

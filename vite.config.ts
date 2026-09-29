@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules')) {
               if (id.includes('katex')) return 'vendor-katex';
               if (id.includes('lucide-react')) return 'vendor-icons';
+              if (id.includes('framer-motion') || id.includes('motion')) return 'vendor-motion';
+              if (id.includes('docx') || id.includes('html-to-image')) return 'vendor-export';
               if (
                 id.includes('@tiptap') ||
                 id.includes('prosemirror') ||

@@ -1,17 +1,9 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useEditor, EditorContent, Node as TiptapNode, mergeAttributes, ReactNodeViewRenderer } from '@tiptap/react';
+import { EditorContent, Node as TiptapNode, mergeAttributes } from '@tiptap/react';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import StarterKit from '@tiptap/starter-kit';
-import { Markdown } from 'tiptap-markdown';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { Table } from '@tiptap/extension-table';
 import { TableMap } from '@tiptap/pm/tables';
-import TableRow from '@tiptap/extension-table-row';
-import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell';
-import Highlight from '@tiptap/extension-highlight';
-import { common, createLowlight } from 'lowlight';
 import { Bold, Italic, List, Link, Image as ImageIcon, Code, Code2, Columns, Heading as HeadingIcon, Quote, Table as TableIcon, ListOrdered, Strikethrough, SlidersHorizontal, ChevronDown, ChevronUp, Rows, Eye, Focus, Minus, Loader2, X, Check, Highlighter, CheckSquare, Sparkles, Send, Copy, RotateCcw, Sigma } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { formatPanguSpacing } from '../lib/pangu';
@@ -30,7 +22,6 @@ import { matchShortcut } from '../lib/shortcuts';
 // Import highlight styles
 import 'highlight.js/styles/atom-one-dark.css';
 
-const lowlight = createLowlight(common);
 const searchHighlightPluginKey = new PluginKey<DecorationSet>('editor-search-highlights');
 
 function buildSearchRegex(query: string, options: { caseSensitive: boolean; wholeWord: boolean }) {

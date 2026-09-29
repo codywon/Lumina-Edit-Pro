@@ -1,5 +1,36 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Type, Clock, History } from 'lucide-react';
+
+function calculateStats(text: string) {
+  const charCount = text.length;
+  let chineseChars = 0;
+  let englishWords = 0;
+  let inWord = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 0x4e00 && code <= 0x9fa5) {
+      chineseChars++;
+      if (inWord) inWord = false;
+    } else if (
+      (code >= 65 && code <= 90) || // A-Z
+      (code >= 97 && code <= 122) || // a-z
+      (code >= 48 && code <= 57) || // 0-9
+      code === 95 // _
+    ) {
+      if (!inWord) {
+        inWord = true;
+        englishWords++;
+      }
+    } else {
+      inWord = false;
+    }
+  }
+
+  const totalWords = chineseChars + englishWords;
+  const readingTimeMin = Math.max(1, Math.ceil(totalWords / 300));
+  return { charCount, totalWords, readingTimeMin };
+}
 
 function FooterComponent({
   content,
@@ -10,36 +41,33 @@ function FooterComponent({
   showToast: (msg: string, level?: 'info' | 'warning' | 'error') => void;
   onOpenTimeline?: () => void;
 }) {
-  const { charCount, totalWords, readingTimeMin } = useMemo(() => {
-    const charCount = content.length;
-    let chineseChars = 0;
-    let englishWords = 0;
-    let inWord = false;
+  const [stats, setStats] = useState(() => calculateStats(content));
 
-    for (let i = 0; i < content.length; i++) {
-      const code = content.charCodeAt(i);
-      if (code >= 0x4e00 && code <= 0x9fa5) {
-        chineseChars++;
-        if (inWord) inWord = false;
-      } else if (
-        (code >= 65 && code <= 90) || // A-Z
-        (code >= 97 && code <= 122) || // a-z
-        (code >= 48 && code <= 57) || // 0-9
-        code === 95 // _
-      ) {
-        if (!inWord) {
-          inWord = true;
-          englishWords++;
-        }
-      } else {
-        inWord = false;
-      }
+  useEffect(() => {
+    // For smaller documents, calculate synchronously for instantaneous feedback
+    if (content.length < 5000) {
+      setStats(calculateStats(content));
+      return;
     }
 
-    const totalWords = chineseChars + englishWords;
-    const readingTimeMin = Math.max(1, Math.ceil(totalWords / 300));
-    return { charCount, totalWords, readingTimeMin };
+    // For larger documents, compute in background idle slice to guarantee 0-frame-drop typing
+    if (typeof (window as any).requestIdleCallback === 'function') {
+      const handle = (window as any).requestIdleCallback(
+        () => {
+          setStats(calculateStats(content));
+        },
+        { timeout: 400 }
+      );
+      return () => (window as any).cancelIdleCallback(handle);
+    } else {
+      const handle = setTimeout(() => {
+        setStats(calculateStats(content));
+      }, 100);
+      return () => clearTimeout(handle);
+    }
   }, [content]);
+
+  const { charCount, totalWords, readingTimeMin } = stats;
 
   return (
     <footer className="h-7 shrink-0 flex items-center justify-between border-t border-slate-200 dark:border-[#27272A] bg-white dark:bg-[#0E0E11] px-4 text-[10px] text-slate-500 z-20 transition-colors duration-200 select-none">

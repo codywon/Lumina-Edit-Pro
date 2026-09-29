@@ -32,22 +32,24 @@ import SidebarLeft from './components/SidebarLeft';
 import Editor from './components/Editor';
 import SidebarRight from './components/SidebarRight';
 import Footer from './components/Footer';
-import SettingsModal from './components/SettingsModal';
-import AICenterModal from './components/AICenterModal';
-import AboutModal from './components/AboutModal';
-import UpdateModal from './components/UpdateModal';
-import UserManualModal from './components/UserManualModal';
-import ExportModal from './components/ExportModal';
-import TimelineModal from './components/TimelineModal';
 import { saveSnapshot } from './lib/timeline';
-import QuickOpenModal from './components/QuickOpenModal';
-import FindReplaceModal from './components/FindReplaceModal';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { useSettings, SettingsProvider } from './contexts/SettingsContext';
 import { matchShortcut } from './lib/shortcuts';
 import { clearWorkspaceHandle, loadWorkspaceHandle, saveWorkspaceHandle } from './lib/workspacePersistence';
 import { AIProvider } from './contexts/AIContext';
 import { checkForUpdate, type ReleaseInfo } from './services/updater';
+
+// Lazy-loaded modal components (deferred until explicitly opened)
+const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
+const AICenterModal = React.lazy(() => import('./components/AICenterModal'));
+const AboutModal = React.lazy(() => import('./components/AboutModal'));
+const UpdateModal = React.lazy(() => import('./components/UpdateModal'));
+const UserManualModal = React.lazy(() => import('./components/UserManualModal'));
+const ExportModal = React.lazy(() => import('./components/ExportModal'));
+const TimelineModal = React.lazy(() => import('./components/TimelineModal'));
+const QuickOpenModal = React.lazy(() => import('./components/QuickOpenModal'));
+const FindReplaceModal = React.lazy(() => import('./components/FindReplaceModal'));
 import {
   openFile,
   openDirectory,
@@ -1319,7 +1321,7 @@ function AppContent() {
         });
         setHeadings(newHeadings);
         isUpdatingFromEditorRef.current = false;
-      }, 200);
+      }, 350);
     },
     editorProps: {
       attributes: {
@@ -1707,7 +1709,10 @@ function AppContent() {
     }
 
     let cancelled = false;
-    const timer = window.setInterval(() => {
+
+    const doRefresh = () => {
+      if (document.hidden) return; // Suspend background disk polling when window is hidden/minimized
+
       refreshWorkspace(workspaceDirectoryHandle, { pruneMissingFiles: true })
         .then(() => {
           nativeWorkspaceRefreshWarningRef.current = false;
@@ -1719,11 +1724,24 @@ function AppContent() {
             nativeWorkspaceRefreshWarningRef.current = true;
           }
         });
-    }, NATIVE_WORKSPACE_REFRESH_INTERVAL_MS);
+    };
+
+    const timer = window.setInterval(doRefresh, NATIVE_WORKSPACE_REFRESH_INTERVAL_MS);
+
+    // Instantly refresh when user focuses back on the application window
+    const handleFocus = () => {
+      if (!cancelled && !document.hidden) {
+        doRefresh();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
     };
   }, [workspaceDirectoryHandle, activeWorkspaceFilePath]);
 
@@ -2921,56 +2939,76 @@ function AppContent() {
         />
       )}
 
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        onCheckUpdate={() => void handleCheckUpdate(true)}
-      />
-      <AICenterModal isOpen={isAICenterOpen} onClose={() => setIsAICenterOpen(false)} />
-      <AboutModal
-        isOpen={isAboutOpen}
-        onClose={() => setIsAboutOpen(false)}
-        onOpenManual={() => setIsManualOpen(true)}
-        onCheckUpdate={() => void handleCheckUpdate(true)}
-      />
-      <UpdateModal
-        isOpen={isUpdateModalOpen}
-        onClose={() => setIsUpdateModalOpen(false)}
-        release={latestReleaseInfo}
-        showToast={showToast}
-      />
-      <UserManualModal
-        isOpen={isManualOpen}
-        onClose={() => setIsManualOpen(false)}
-      />
-      <ExportModal
-        isOpen={isExportDocxModalOpen}
-        onClose={() => setIsExportDocxModalOpen(false)}
-        content={content}
-        showToast={showToast}
-      />
-      <TimelineModal
-        isOpen={isTimelineOpen}
-        onClose={() => setIsTimelineOpen(false)}
-        docKey={getActiveDocKey()}
-        currentContent={content}
-        onRestoreContent={handleRestoreFromTimeline}
-        showToast={showToast}
-      />
-      <QuickOpenModal
-        isOpen={isQuickOpenVisible}
-        onClose={() => setIsQuickOpenVisible(false)}
-        workspaceEntries={workspaceEntries}
-        recentFiles={recentFiles}
-        onOpenWorkspaceFile={handleOpenWorkspaceFile}
-        onOpenRecentFile={handleOpenRecentFile}
-      />
-      <FindReplaceModal
-        isOpen={isFindReplaceOpen}
-        onClose={() => setIsFindReplaceOpen(false)}
-        editor={editor}
-        showToast={showToast}
-      />
+      <React.Suspense fallback={null}>
+        {isSettingsOpen && (
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            onCheckUpdate={() => void handleCheckUpdate(true)}
+          />
+        )}
+        {isAICenterOpen && (
+          <AICenterModal isOpen={isAICenterOpen} onClose={() => setIsAICenterOpen(false)} />
+        )}
+        {isAboutOpen && (
+          <AboutModal
+            isOpen={isAboutOpen}
+            onClose={() => setIsAboutOpen(false)}
+            onOpenManual={() => setIsManualOpen(true)}
+            onCheckUpdate={() => void handleCheckUpdate(true)}
+          />
+        )}
+        {isUpdateModalOpen && (
+          <UpdateModal
+            isOpen={isUpdateModalOpen}
+            onClose={() => setIsUpdateModalOpen(false)}
+            release={latestReleaseInfo}
+            showToast={showToast}
+          />
+        )}
+        {isManualOpen && (
+          <UserManualModal
+            isOpen={isManualOpen}
+            onClose={() => setIsManualOpen(false)}
+          />
+        )}
+        {isExportDocxModalOpen && (
+          <ExportModal
+            isOpen={isExportDocxModalOpen}
+            onClose={() => setIsExportDocxModalOpen(false)}
+            content={content}
+            showToast={showToast}
+          />
+        )}
+        {isTimelineOpen && (
+          <TimelineModal
+            isOpen={isTimelineOpen}
+            onClose={() => setIsTimelineOpen(false)}
+            docKey={getActiveDocKey()}
+            currentContent={content}
+            onRestoreContent={handleRestoreFromTimeline}
+            showToast={showToast}
+          />
+        )}
+        {isQuickOpenVisible && (
+          <QuickOpenModal
+            isOpen={isQuickOpenVisible}
+            onClose={() => setIsQuickOpenVisible(false)}
+            workspaceEntries={workspaceEntries}
+            recentFiles={recentFiles}
+            onOpenWorkspaceFile={handleOpenWorkspaceFile}
+            onOpenRecentFile={handleOpenRecentFile}
+          />
+        )}
+        {isFindReplaceOpen && (
+          <FindReplaceModal
+            isOpen={isFindReplaceOpen}
+            onClose={() => setIsFindReplaceOpen(false)}
+            editor={editor}
+            showToast={showToast}
+          />
+        )}
+      </React.Suspense>
 
       {/* Toast Notification */}
       <AnimatePresence>

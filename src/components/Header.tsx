@@ -8,8 +8,6 @@ import BrandIcon from './BrandIcon';
 
 marked.use(createMarkedKatexExtension());
 import { formatPanguSpacing } from '../lib/pangu';
-import { exportElementToLongImage } from '../lib/exportImage';
-import { exportMarkdownToDocx } from '../lib/exportDocx';
 import { extractDocumentBaseName, saveExportedBytes } from '../lib/exportSave';
 
 interface HeaderProps {
@@ -107,14 +105,19 @@ function HeaderComponent({
       }
     }
   };
-  const handleExportLongImage = () => {
+  const handleExportLongImage = async () => {
     const editorDom = document.querySelector('.printable-content') as HTMLElement;
     if (!editorDom) {
       showToast('未找到可导出的正文内容', 'warning');
       return;
     }
     const baseName = extractDocumentBaseName(content, 'Lumina-Document');
-    void exportElementToLongImage(editorDom, `${baseName}.png`, showToast);
+    try {
+      const { exportElementToLongImage } = await import('../lib/exportImage');
+      await exportElementToLongImage(editorDom, `${baseName}.png`, showToast);
+    } catch (err: any) {
+      showToast(err?.message || '导出长图失败', 'error');
+    }
   };
   const handleExport = async (format: 'html' | 'pdf' | 'md') => {
     const baseName = extractDocumentBaseName(content, 'Lumina-Document');
@@ -352,7 +355,16 @@ function HeaderComponent({
         { label: '历史版本时光机...', action: () => onOpenTimeline?.() },
         { label: '打印', shortcut: '', action: () => window.print() },
         { label: '导出为PDF', action: () => handleExport('pdf') },
-        { label: '导出为Word', action: () => onOpenExportDocx ? onOpenExportDocx() : void exportMarkdownToDocx(content, undefined, showToast) },
+        { label: '导出为Word', action: () => {
+          if (onOpenExportDocx) {
+            onOpenExportDocx();
+          } else {
+            void (async () => {
+              const { exportMarkdownToDocx } = await import('../lib/exportDocx');
+              await exportMarkdownToDocx(content, undefined, showToast);
+            })();
+          }
+        } },
         { label: '导出为HTML', action: () => handleExport('html') },
         { label: '导出为长图', action: handleExportLongImage },
         { label: '导出为Markdown', action: () => handleExport('md') },

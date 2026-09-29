@@ -352,7 +352,7 @@ function HeaderComponent({
         { label: '新建文件', shortcut: settings.shortcuts.newFile, action: onNewFile },
         { label: '打开文件', shortcut: settings.shortcuts.openFile, action: onOpenFile },
         { label: '保存', shortcut: settings.shortcuts.saveFile, action: onSave },
-        { label: '历史版本时光机...', action: () => onOpenTimeline?.() },
+        { label: '时光机...', action: () => onOpenTimeline?.() },
         { label: '打印', shortcut: '', action: () => window.print() },
         { label: '导出为PDF', action: () => handleExport('pdf') },
         { label: '导出为Word', action: () => {

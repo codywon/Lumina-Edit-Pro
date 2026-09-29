@@ -1,91 +1,97 @@
-﻿<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+<div align="center">
+  <img src="app-icon.svg" width="96" height="96" alt="Lumina Edit Pro Logo" />
+  <h1>Lumina Edit Pro</h1>
+  <p>面向现代化写作与工程文档的 Local-First AI Markdown 桌面编辑器</p>
+
+  <p>
+    <a href="https://github.com/codywon/Lumina-Edit-Pro/releases/latest"><img src="https://img.shields.io/github/v/release/codywon/Lumina-Edit-Pro?color=ec5b13&label=Release" alt="Latest Release" /></a>
+    <img src="https://img.shields.io/badge/Platform-Windows%20(x64)-blue" alt="Platform Windows" />
+    <img src="https://img.shields.io/badge/Tauri-2.0-24C8D5?logo=tauri&logoColor=white" alt="Tauri 2" />
+    <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
+    <img src="https://img.shields.io/badge/Rust-1.77%2B-DEA584?logo=rust&logoColor=white" alt="Rust" />
+    <img src="https://img.shields.io/badge/License-Non--Commercial-brightgreen" alt="License" />
+  </p>
+
+  <p>
+    <a href="https://github.com/codywon/Lumina-Edit-Pro/releases/latest">下载体验</a> ·
+    <a href="docs/USER_MANUAL.html">用户手册</a> ·
+    <a href="docs/表格排版与自适应设计规范.md">排版规范</a> ·
+    <a href="#-快速上手-本地开发">开发构建</a>
+  </p>
 </div>
 
-# Lumina Edit Pro (v1.0.0)
+---
 
-> **面向现代化写作与工程文档的 Local-First AI Markdown 桌面编辑器。**  
-> 🏷️ **版本**：v1.0.0 (Release)  
-> 👤 **开发者**：Powered by codywon (290923628@qq.com)  
-> 📜 **许可**：仅供学习和交流！个人使用免费许可，**严禁任何形式的商业营利使用**。  
-> 📖 **官方交互式操作手册 (HTML)**：[docs/用户手册.html](docs/用户手册.html)（或 [docs/USER_MANUAL.html](docs/USER_MANUAL.html)）  
-> 📐 **表格黄金排版规范**：[docs/表格排版与自适应设计规范.md](docs/表格排版与自适应设计规范.md)
+## 📖 项目简介
+
+**Lumina Edit Pro** 是一款基于 **Tauri 2 + Rust + React 19** 构建的轻量级、本地优先（Local-First）Markdown 桌面编辑器。专为注重隐私、追求极速输入流与专业排版的技术创作者打造，具备真正的单文件绿色运行与零依赖出版级导出能力。
 
 ---
 
-## 🌟 核心特性与功能亮点
+## ✨ 核心特性
 
-- ⚡ **300ms 极速启动与零输入延迟**：基于 Tauri 2 + Rust + React 19，打字与 AST 序列化彻底解耦，数万字长文敲击 1ms 顺滑响应。
-- 📊 **表格大师 (Word级自适应与拖拽)**：
-  - 智能内容自适应（类似 DeepSeek/ChatGPT），彻底消灭单字断行孤行；
-  - 鼠标移动到边框（7px 热区），指针变 `↔`，主题色导轨左右拖拽任意修改列宽；
-  - 菜单支持一键列居左/居中/靠右，一键均分，一键自适应重置；
-  - Excel 级 `Tab` 单元格穿梭并在行末自动增行，`Ctrl+Enter` 随时向下插入新行。
-- ⌨️ **Typora 快捷键 100% 深度兼容**：
-  - 标题 `Ctrl+1~6`、段落 `Ctrl+0`、表格 `Ctrl+T`、代码块 `Ctrl+Shift+K`、引用 `Ctrl+Shift+Q`、列表 `Ctrl+Shift+[`/`]`、删除线 `Alt+Shift+5`、行内代码 `Ctrl+Shift+\``、高亮 `Ctrl+Shift+H`、清除格式 `Ctrl+\`、专注 `F8`、打字机 `F9`、全屏 `F11`，老用户零迁移成本无缝切换。
-- 🔍 **全文批量查找与替换 (Ctrl+H)**：
-  - 极简毛玻璃浮层，单步替换、全部替换、区分大小写、全词匹配、实时位置计数（如 `1/14`）。
-- ⚡ **`Ctrl + P` 全局文档秒开命令盘**：屏幕顶部极简浮层，全键盘拼音模糊搜索，回车秒开项目任意文档。
-- 🧭 **大纲随动雷达 (Scroll-Spy)**：正文向下滚屏时，左侧大纲树自动高亮当前所在章节，文章脉络毫发毕现。
-- 🖼️ **图片交互升级**：四角拖拽手柄自由缩放大小，25%/50%/75%/100% 快速预设与左/中/右对齐。
-- 🎯 **专注模式段落聚焦 (Focus Dimming)**：进入专注模式（`F8`），当前书写段落保持清晰，上文与下文自动 28% 柔和淡化，锁定创作心流。
-- 📄 **全功能导出矩阵 (导出为PDF · 导出为Word · 导出为HTML · 导出为长图 · 导出为Markdown)**：
-  - **导出为Word**：内置零依赖 OpenXML 导出引擎（**无需安装 Pandoc**），一键选择【白皮书风 (ISO/IEEE标准·Pantone 294C深蓝·科技三线表) / 正式公文 (GB/T 9704-2012国家公文标准·仿宋三号+首行缩进2字符+28磅公文行距) / 商业报告 (顶部横幅+元数据信息条) / 经典极简 (GitHub/Typora极简标准)】，带 Word 导航窗格大纲树（Heading 1~6）、出版级表格、彩色左边框 Callout 卡片、灰底等宽代码块与动态页码，Word / WPS 直接打开完美编辑；
-  - **导出为PDF**：系统级打印驱动分页高清直出；
-  - **导出为HTML**：单文件自包含排版样式；
-  - **导出为长图**：2x Retina 高清长图直出 (PNG)；
-  - **导出为Markdown**：标准通用纯文本源码导出。
-- 🈳 **中英文排版规范化**：自动在汉字与英文字母/数字间插入呼吸微距空格，一键赋予印刷出版级质感。
-- 💡 **现代 Callout 警告块**：原生兼容 GitHub / Obsidian 语法（`> [!NOTE]` / `> [!TIP]` / `> [!WARNING]` / `> [!IMPORTANT]` / `> [!CAUTION]`）。
-- 🪄 **`Ctrl + K` 行内 AI 原地重塑**：选区就地润色、翻译、提炼、转表格，原地一键回车采纳，写作心流毫不割裂。
-- 📸 **截图 Ctrl+V 一键自动归档到本地 .assets**：任何模式下粘贴剪贴板截图，自动在文档同级创建 `[文档名].assets/image_时间戳.png` 并插入相对路径，Markdown 极度轻盈，坚决杜绝 Base64 乱码膨胀与外链丢失。
-- 📑 **`[TOC]` 动态交互式大纲目录**：输入 `[TOC]` 自动生成与全文 H1~H6 标题实时联动的大纲卡片，点击平滑滚动跳转；导出 Word 自动生成带点线引导符的出版级标准目录。
-- 📋 **YAML Frontmatter 商务元数据卡片**：文档开头的 `---` YAML 元数据自动渲染为精致折叠式元数据卡片，清晰展现版本、状态、作者与标签，可一键在源码中展开编辑。
-- 🕒 **本地历史时光机 (Local History Time Machine)**：底部状态栏【时光机】与【文件 -> 时光机...】，保存多版本历史快照，清晰展示字数增减差异，支持一键回滚恢复与内容复制。
-- 👁️ **外部文件变动感知监听 (File Watcher)**：文件被 Git pull 或外部脚本改动时顶部平滑浮出提示，支持【一键重新载入最新内容】或【保留当前编辑】，彻底杜绝协同覆盖冲突。
-- 🖥️ **Codex Desktop 沉浸式视窗**：彻底抹去 Windows 双标题栏，无边框一体化窗口，全顶栏平滑拖动与双击最大化。
+### ⚡ 极速启动与大文档渲染
+- **毫秒级冷启动**：启动即进入编辑，打字与 AST 序列化彻底解耦，超低输入延迟。
+- **硬件级虚拟化渲染**：引入 Chromium 视窗虚拟化布局（`content-visibility: auto`），数十万字超长技术文档滚屏依然稳定维持 60/120 FPS 高刷。
+
+### 📐 专业排版与数学公式
+- **LaTeX / KaTeX 公式系统**：支持行内公式（`$...$`）与块级公式（`$$...$$`），提供公式浮动交互框，支持实时预览与即时纠错。
+- **自适应智能表格**：内容驱动列宽自适应，避免文字异常折行；支持鼠标自由拖拽调节、快捷键单元格穿梭与行末自动增行。
+- **中英文排版规范化**：内置盘古之白引擎，一键在汉字与英文/数字之间插入呼吸间距。
+
+### 📄 出版级多格式导出
+- **Word 导出 (.docx)**：内置零依赖 OpenXML 引擎（**无需安装 Pandoc**），支持商业报告、白皮书、公文规范等专业版式，自动生成大纲导航与页码。
+- **PDF 与长图直出**：分页纯墨呈现，支持 W3C 标准页码与 2x Retina 高清长图直出。
+- **标准 Markdown & HTML**：自包含排版样式无损输出。
+
+### 🛠️ 键盘流与工程生产力
+- **全键盘快捷键体系**：对标主流 Markdown 快捷键习惯，支持标题、列表、引用、表格、代码块与专注模式无缝切换。
+- **全局命令盘 (`Ctrl + P`) & 全文查找替换 (`Ctrl + H`)**：拼音模糊检索快速切文，批量替换精准计数。
+- **动态大纲与元数据卡片**：支持交互式 `[TOC]` 大纲生成、YAML Frontmatter 商务元数据折叠卡片。
+- **时光机与外部文件监控**：静默记录多版本快照，支持差异比对与一键回滚；实时感知 Git pull 与外部文件变动。
+
+### 🤖 本地优先 AI 协同 (可选)
+- **自由接入大模型**：支持配置任意兼容 OpenAI 标准的 API 地址与密钥，本地 Local-First 存储，密钥绝不上云。
+- **行内就地重塑 (`Ctrl + K`)**：选区原地润色、翻译、代码转换。
+- **可收起 AI 侧边栏**：支持上下文带入、图像生成与长对话流式交互。
 
 ---
 
-## 📜 许可证 (License)
+## 📦 下载与安装
+
+进入 [**Releases 页面**](https://github.com/codywon/Lumina-Edit-Pro/releases/latest) 下载唯一的单文件可执行程序：
+
+- 文件名：**`Lumina-Edit-Pro.exe`**
+- 免安装、纯绿色、零残留，直接双击即可运行。
+- 内置**原子置换在线更新**：点击【帮助】->【检查更新...】即可无感原地自更新。
+
+---
+
+## 💻 快速上手 (本地开发)
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/codywon/Lumina-Edit-Pro.git
+cd Lumina-Edit-Pro
+
+# 2. 安装依赖
+npm install
+
+# 3. 启动本地前端开发服务
+npm run dev
+
+# 4. 运行全量测试套件 (127 项单元测试)
+npm test
+
+# 5. 编译构建 Windows 桌面单文件程序
+npm run desktop:build
+```
+
+---
+
+## 📜 许可协议 (License)
 
 本项目遵循 **Non-Commercial Personal Use License**（个人非商业使用许可）：
 - ✅ **允许**：个人学习、研究、交流和个人写作使用；
 - ❌ **严禁**：任何未经作者书面授权的商业营利、收费集成、转售、商业分发或提供闭源商业服务；
-- 完整许可条款请参阅根目录下的 [LICENSE](LICENSE) 文件。
-- **Powered by codywon · 仅供学习和交流**
-
----
-
-**主要能力**
-- OpenAI 兼容配置：自定义 `baseUrl` / `apiKey`
-- 模型管理：本地默认仅 `gpt-5`，支持远程刷新或本地维护
-- AI 能力中心：模型、模板、记忆与 API 配置一体化
-- 模板体系：内置 + 自定义模板，支持标签、Slash 指令、默认模板
-- 会话体验：流式输出、停止与重试、错误详情、Markdown 渲染
-- 上下文与记忆：可配置上下文预算（默认 200k / 阈值 80%），自动摘要，长短记忆分离
-- 历史与检索：历史对话 grep 检索、工作区 Markdown 文档检索（可开关）
-- 编辑器内联 AI：选区/光标动作、差异预览、插入/替换/追加
-- UI 细节：AI 侧栏可拉伸，字体与排版适配，正文排版更接近主流 Markdown 编辑器
-
-**默认上下文策略（最佳实践）**
-- 有选区：优先选区
-- 无选区：检索相关片段
-- 达到阈值：触发摘要压缩
-- 摘要输入包含 head/tail 限制以控制成本（仍保留原文，可继续检索）
-
-**导出与打印**
-- HTML 导出：先渲染 Markdown 再导出，内置排版样式
-- PDF 导出：调用浏览器打印，只输出正文（隐藏侧栏/工具栏）
-- 代码块：Mac 风格窗口样式，自动换行；打印/导出时隐藏复制等按钮
-- 打印提示：如需背景色，请在浏览器打印对话框开启“背景图形/背景颜色”
-
-**本地运行**
-1. 安装依赖：`npm install`
-2. 启动开发：`npm run dev`
-
-**配置说明**
-- 运行后在“AI 能力中心”填写 `baseUrl` 与 `apiKey`
-- 模型列表可手动维护或通过“刷新模型”获取
-- 上下文预算可全局设置，也可按模型覆盖
-- 无需配置 `.env` 即可使用 OpenAI 兼容配置
+- 详细许可条款请参阅根目录下的 [LICENSE](LICENSE) 文件。

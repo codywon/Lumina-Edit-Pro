@@ -17,16 +17,6 @@ export async function getCurrentExeInfo(): Promise<CurrentExeInfo | null> {
   }
 }
 
-export async function getDefaultGitHubToken(): Promise<string | null> {
-  if (!isTauriRuntime()) return null;
-  try {
-    const invoke = getNativeInvoke();
-    return await invoke<string | null>('app_get_default_gh_token');
-  } catch {
-    return null;
-  }
-}
-
 export async function checkForUpdate(options: {
   feedUrl?: string;
   githubToken?: string;
@@ -36,11 +26,7 @@ export async function checkForUpdate(options: {
     Accept: 'application/vnd.github.v3+json',
   };
 
-  let token = options.githubToken?.trim();
-  if (!token) {
-    token = (await getDefaultGitHubToken()) || undefined;
-  }
-
+  const token = options.githubToken?.trim();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }

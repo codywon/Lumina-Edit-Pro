@@ -580,11 +580,11 @@ export default function SettingsModal({ isOpen, onClose, onCheckUpdate }: Settin
                           type="password"
                           value={settings.githubToken || ''}
                           onChange={(e) => updateSettings({ githubToken: e.target.value })}
-                          placeholder="例如: ghp_xxxx 或 gho_xxxx（若本地已安装并登录 gh CLI，系统将自动复用凭据）"
+                          placeholder="例如: ghp_xxxx（仅保存在您本地浏览器存储，绝不外发）"
                           className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-[#27272A] bg-slate-50 dark:bg-[#18181B] text-slate-800 dark:text-slate-200 focus:outline-none focus:border-accent"
                         />
                         <p className="text-[11px] text-slate-400 mt-1">
-                          系统已支持自动侦测本地 GitHub CLI 登录凭证；也可在此处手动粘贴个人访问令牌 (Personal Access Token)。
+                          若仓库已设置为公开（Public），此处直接留空即可全自动更新。
                         </p>
                       </div>
                     </section>

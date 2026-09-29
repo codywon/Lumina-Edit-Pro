@@ -320,36 +320,6 @@ fn app_open_default_apps_settings() -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-fn app_get_default_gh_token() -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let mut cmd = std::process::Command::new("cmd");
-        cmd.args(["/C", "gh", "auth", "token"]);
-        cmd.creation_flags(0x08000000);
-        if let Ok(output) = cmd.output() {
-            if output.status.success() {
-                let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !token.is_empty() {
-                    return Some(token);
-                }
-            }
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        if let Ok(output) = std::process::Command::new("gh").args(["auth", "token"]).output() {
-            if output.status.success() {
-                let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !token.is_empty() {
-                    return Some(token);
-                }
-            }
-        }
-    }
-    None
-}
-
 // Single File Commands
 #[tauri::command]
 fn file_mtime(payload: FilePathPayload) -> Result<u64, String> {
@@ -850,7 +820,6 @@ pub fn run() {
             app_cancel_update,
             app_save_update_as,
             app_apply_update_and_restart,
-            app_get_default_gh_token,
             file_mtime,
             file_read,
             file_write,

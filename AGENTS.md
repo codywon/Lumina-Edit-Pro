@@ -68,11 +68,12 @@
 }
 ```
 
-### 法则三：设立列宽呼吸底线（Min-Width Safeguards）
+### 法则三：设立列宽呼吸底线与首列紧凑原则（Min-Width & First-Column Compactness）
 
 - 避免短信息列被长文本列挤压至不足以显示简短词组：
-  - **弹性列底线**：`th, td { min-width: 48px; }`（自适应容纳序号、标识符、状态，不浪费空间）；
-  - **舒展内边距**：`padding: var(--table-row-padding, 0.55rem) 0.8rem !important;`。
+  - **首列紧凑单行呈现**：`th:first-child, td:first-child { white-space: nowrap; width: 1%; min-width: 54px; font-weight: 500; }`，自适应贴合维度、参数、序号等短字段，绝不虚胖占位；
+  - **单元格弹性列底线**：`th, td { min-width: 50px; vertical-align: middle; }`；
+  - **舒适内边距**：`padding: var(--table-row-padding, 0.65rem) 0.95rem !important;`。
 
 ### 法则四：单元格内代码块（Code Chips）原子完整性规范（Atomic Code Integrity）
 
@@ -83,20 +84,24 @@
 .prose-custom th code,
 .tiptap td code,
 .tiptap th code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important;
   font-size: 0.84em !important;
-  padding: 0.12em 0.38em !important;
+  padding: 0.14em 0.42em !important;
   border-radius: 4px !important;
-  background-color: rgba(175, 184, 193, 0.18) !important;
-  border: 1px solid rgba(175, 184, 193, 0.22) !important;
+  background-color: rgba(175, 184, 193, 0.2) !important;
+  border: 1px solid rgba(175, 184, 193, 0.28) !important;
+  color: #cf222e !important; /* Typora/GitHub 经典代码药丸红 */
   white-space: nowrap !important; /* 关键：代码标识符原子完整，禁止拆词折断 */
-  display: inline !important;
+  display: inline-block !important;
   line-height: 1.35 !important;
+  vertical-align: baseline !important;
 }
 
 .dark .prose-custom td code,
 .dark .tiptap td code {
+  color: #ff7b72 !important;
   background-color: rgba(110, 118, 129, 0.25) !important;
-  border-color: rgba(110, 118, 129, 0.28) !important;
+  border-color: rgba(110, 118, 129, 0.3) !important;
 }
 ```
 
@@ -104,18 +109,18 @@
 
 ## 3. 视觉与交互规范
 
-1. **表头双实线**：表头底部采用 `border-bottom: 2px solid #d0d7de;`（暗色为 `#30363d`），彰显正式出版物与专业文档的高级质感。
+1. **表头单实线与圆角**：表头底部采用 `border-bottom: 1px solid #d0d7de;`，四角平滑包裹（`border-radius: 8px`），彰显正式出版物与专业文档的高级质感。
 
 2. **行悬停微光**：
 
    ```css
    .prose-custom tr:hover td,
    .tiptap tr:hover td {
-     background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.035);
+     background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.04) !important;
    }
    .dark .prose-custom tr:hover td,
    .dark .tiptap tr:hover td {
-     background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.07);
+     background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.08) !important;
    }
    ```
 

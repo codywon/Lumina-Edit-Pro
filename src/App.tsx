@@ -591,6 +591,8 @@ function AppContent() {
   const leftPanelWidthRef = useRef(leftPanelWidth);
   const aiPanelWidthRef = useRef(aiPanelWidth);
   const autoSaveErrorRef = useRef(false);
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const isFileSwitchingRef = useRef(false);
   const nativeWorkspaceRefreshWarningRef = useRef(false);
   const pendingUpdateTimerRef = useRef<number | null>(null);
   const isUpdatingFromEditorRef = useRef(false);
@@ -599,6 +601,9 @@ function AppContent() {
     return () => {
       if (pendingUpdateTimerRef.current !== null) {
         clearTimeout(pendingUpdateTimerRef.current);
+      }
+      if (autoSaveTimerRef.current !== null) {
+        clearTimeout(autoSaveTimerRef.current);
       }
     };
   }, []);
@@ -640,27 +645,42 @@ function AppContent() {
   useEffect(() => {
     if (!settings.autoSave) return;
 
-    // Fast bail out: if content has not changed compared to last saved content, do NOTHING
-    if (lastSavedContentRef.current === content) {
+    // Fast bail out: if content has not changed, or currently switching files, do NOTHING
+    if (isFileSwitchingRef.current || lastSavedContentRef.current === content) {
       return;
     }
 
-    const delayMs = Math.max(3000, (settings.autoSaveInterval || 3) * 1000);
+    if (autoSaveTimerRef.current !== null) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
 
-    const timer = setTimeout(() => {
-      // Re-verify after debounce delay in case manual save or sync occurred
-      if (lastSavedContentRef.current === content) {
+    const delayMs = Math.max(3000, (settings.autoSaveInterval || 3) * 1000);
+    const targetHandle = activeFileHandle;
+    const targetPath = activeWorkspaceFilePath;
+    const targetContent = content;
+
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null;
+
+      // Re-verify after debounce delay: must NOT be switching files and target must match
+      if (
+        isFileSwitchingRef.current ||
+        activeFileHandleRef.current !== targetHandle ||
+        activeWorkspaceFilePathRef.current !== targetPath ||
+        lastSavedContentRef.current === targetContent
+      ) {
         return;
       }
 
-      if (content.length > 500_000 && hasMarkdownDataImage(content)) {
+      if (targetContent.length > 500_000 && hasMarkdownDataImage(targetContent)) {
         if (!localDraftImageWarningRef.current) {
           showWarningToast('当前文档包含较大的内嵌 AI 图片，已跳过本地草稿缓存；建议打开可写工作区或保存文件。');
           localDraftImageWarningRef.current = true;
         }
       } else {
         try {
-          localStorage.setItem('lumina-content', content);
+          localStorage.setItem('lumina-content', targetContent);
           localDraftImageWarningRef.current = false;
         } catch (error) {
           console.error('Local draft save error:', error);
@@ -672,21 +692,23 @@ function AppContent() {
       }
 
       const canWrite =
-        activeFileHandle &&
-        (isNativeFileHandle(activeFileHandle) ||
-          typeof (activeFileHandle as any).createWritable === 'function' ||
-          isNativeWorkspaceFileHandle(activeFileHandle));
+        targetHandle &&
+        (isNativeFileHandle(targetHandle) ||
+          typeof (targetHandle as any).createWritable === 'function' ||
+          isNativeWorkspaceFileHandle(targetHandle));
 
       if (!canWrite) {
         return;
       }
 
-      writeFile(activeFileHandle, content)
+      writeFile(targetHandle, targetContent)
         .then(() => {
           autoSaveErrorRef.current = false;
-          lastSavedContentRef.current = content;
-          if (activeWorkspaceFilePath) {
-            workspaceContentCacheRef.current.set(activeWorkspaceFilePath, content);
+          if (activeFileHandleRef.current === targetHandle) {
+            lastSavedContentRef.current = targetContent;
+            if (targetPath) {
+              workspaceContentCacheRef.current.set(targetPath, targetContent);
+            }
           }
         })
         .catch((error) => {
@@ -698,7 +720,12 @@ function AppContent() {
         });
     }, delayMs);
 
-    return () => clearTimeout(timer);
+    return () => {
+      if (autoSaveTimerRef.current !== null) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
   }, [content, settings.autoSave, settings.autoSaveInterval, activeFileHandle, activeWorkspaceFilePath]);
 
   useEffect(() => {
@@ -1483,6 +1510,16 @@ function AppContent() {
   }, []);
 
   const syncDocumentContent = (nextContent: string) => {
+    if (autoSaveTimerRef.current !== null) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (pendingUpdateTimerRef.current !== null) {
+      clearTimeout(pendingUpdateTimerRef.current);
+      pendingUpdateTimerRef.current = null;
+    }
+    isUpdatingFromEditorRef.current = false;
+
     setContent(nextContent);
     contentRef.current = nextContent;
     lastSavedContentRef.current = nextContent;
@@ -1908,10 +1945,21 @@ function AppContent() {
   const handleOpenFile = async () => {
     const result = await openFile() as any;
     if (result) {
-      setActiveFileHandle(result.fileHandle);
-      setActiveWorkspaceFilePath(null);
-      syncDocumentContent(result.content);
-      storeRecentFile(result.name, result.fileHandle);
+      if (autoSaveTimerRef.current !== null) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      isFileSwitchingRef.current = true;
+      try {
+        activeFileHandleRef.current = result.fileHandle;
+        activeWorkspaceFilePathRef.current = null;
+        setActiveFileHandle(result.fileHandle);
+        setActiveWorkspaceFilePath(null);
+        syncDocumentContent(result.content);
+        storeRecentFile(result.name, result.fileHandle);
+      } finally {
+        isFileSwitchingRef.current = false;
+      }
     }
   };
 
@@ -1941,8 +1989,21 @@ function AppContent() {
   const handleOpenWorkspaceFile = async (entry: WorkspaceFileEntry) => {
     const targetHandle = entry.handle ?? entry.file;
 
+    // Immediately cancel any pending timers from previous document
+    if (autoSaveTimerRef.current !== null) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (pendingUpdateTimerRef.current !== null) {
+      clearTimeout(pendingUpdateTimerRef.current);
+      pendingUpdateTimerRef.current = null;
+    }
+    isFileSwitchingRef.current = true;
+
     try {
       const fileContent = await readFile(targetHandle);
+      activeFileHandleRef.current = targetHandle;
+      activeWorkspaceFilePathRef.current = entry.path;
       setActiveFileHandle(targetHandle);
       setActiveWorkspaceFilePath(entry.path);
       syncDocumentContent(fileContent);
@@ -1953,6 +2014,8 @@ function AppContent() {
       console.error('Error opening workspace file:', error);
       showErrorToast('未能打开工作区文件，请检查文件权限后重试');
       return false;
+    } finally {
+      isFileSwitchingRef.current = false;
     }
   };
 
@@ -1962,8 +2025,20 @@ function AppContent() {
       return;
     }
 
+    if (autoSaveTimerRef.current !== null) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (pendingUpdateTimerRef.current !== null) {
+      clearTimeout(pendingUpdateTimerRef.current);
+      pendingUpdateTimerRef.current = null;
+    }
+    isFileSwitchingRef.current = true;
+
     try {
       const fileContent = await readFile(file.handle);
+      activeFileHandleRef.current = file.handle;
+      activeWorkspaceFilePathRef.current = null;
       setActiveFileHandle(file.handle);
       setActiveWorkspaceFilePath(null);
       syncDocumentContent(fileContent);
@@ -1971,6 +2046,8 @@ function AppContent() {
     } catch (error) {
       console.error('Error opening recent file:', error);
       showErrorToast('未能重新打开最近文件，请重新选择该文件');
+    } finally {
+      isFileSwitchingRef.current = false;
     }
   };
 

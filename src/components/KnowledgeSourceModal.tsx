@@ -56,7 +56,7 @@ export default function KnowledgeSourceModal({
   // Options
   const [saveMode, setSaveMode] = useState<'new-file' | 'insert-cursor'>('new-file');
   const [localizeAssets, setLocalizeAssets] = useState(true);
-  const [includeFrontmatter, setIncludeFrontmatter] = useState(true);
+  const [includeFrontmatter, setIncludeFrontmatter] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
 
   // Processing state
@@ -545,7 +545,6 @@ export default function KnowledgeSourceModal({
                       checked={saveMode === 'new-file'}
                       onChange={() => {
                         setSaveMode('new-file');
-                        setIncludeFrontmatter(true);
                       }}
                       className="mt-0.5 text-orange-500 focus:ring-orange-500"
                     />
@@ -572,7 +571,6 @@ export default function KnowledgeSourceModal({
                       checked={saveMode === 'insert-cursor'}
                       onChange={() => {
                         setSaveMode('insert-cursor');
-                        setIncludeFrontmatter(false);
                       }}
                       className="mt-0.5 text-orange-500 focus:ring-orange-500"
                     />
@@ -608,7 +606,7 @@ export default function KnowledgeSourceModal({
                     />
                     <span>
                       注入 YAML Frontmatter
-                      <span className="text-neutral-400 dark:text-neutral-500 ml-1">(记录原作者、出处 URL、剪藏时间)</span>
+                      <span className="text-neutral-400 dark:text-neutral-500 ml-1">(选填，生成 --- 顶部元数据供静态网站或知识库解析)</span>
                     </span>
                   </label>
                 </div>

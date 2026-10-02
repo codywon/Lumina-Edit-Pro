@@ -48,7 +48,7 @@ export default function AboutModal({ isOpen, onClose, onOpenManual, onCheckUpdat
                 <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#27272A] border border-slate-100 dark:border-white/5">
                   <span className="text-xs text-slate-500 dark:text-slate-400">当前版本</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-accent">v1.1.2 (Release)</span>
+                    <span className="text-xs font-bold text-accent">v1.1.3 (Release)</span>
                     {onCheckUpdate && (
                       <button
                         type="button"

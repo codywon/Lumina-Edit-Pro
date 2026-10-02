@@ -40,6 +40,7 @@ import { clearWorkspaceHandle, loadWorkspaceHandle, saveWorkspaceHandle } from '
 import { AIProvider } from './contexts/AIContext';
 import { checkForUpdate, type ReleaseInfo } from './services/updater';
 import { setActiveDocumentPathInfo } from './lib/imageResolver';
+import { parseFrontmatter } from './lib/frontmatter';
 
 // Lazy-loaded modal components (deferred until explicitly opened)
 const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
@@ -519,6 +520,7 @@ function getNextWorkspaceFolderName(entries: WorkspaceEntry[]) {
 function AppContent() {
   const { settings, updateSettings } = useSettings();
   const [content, setContent] = useState(initialContent);
+  const currentRawFrontmatterRef = useRef<string | null>(null);
   const [viewMode, setViewMode] = useState<'wysiwyg' | 'source' | 'split'>('wysiwyg');
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
@@ -1330,8 +1332,11 @@ function AppContent() {
       pendingUpdateTimerRef.current = window.setTimeout(() => {
         pendingUpdateTimerRef.current = null;
         const md = (editor.storage as any).markdown?.getMarkdown?.() ?? '';
-        contentRef.current = md;
-        setContent(md);
+        const fullMd = currentRawFrontmatterRef.current
+          ? `--- \n${currentRawFrontmatterRef.current}\n---\n\n${md.replace(/^\n+/, '')}`
+          : md;
+        contentRef.current = fullMd;
+        setContent(fullMd);
 
         const newHeadings: { level: number; text: string; id: string; pos: number }[] = [];
         editor.state.doc.descendants((node: any, pos: number) => {
@@ -1402,8 +1407,10 @@ function AppContent() {
   useEffect(() => {
     if (editor && !editor.isFocused && !isUpdatingFromEditorRef.current) {
       const currentMd = (editor.storage as any).markdown?.getMarkdown?.();
-      if (content !== currentMd) {
-        editor.commands.setContent(content);
+      const parsed = parseFrontmatter(content);
+      const targetBody = parsed.frontmatter ? parsed.body : content;
+      if (targetBody !== currentMd) {
+        editor.commands.setContent(targetBody);
       }
     }
   }, [content, editor]);
@@ -1549,19 +1556,44 @@ function AppContent() {
     }
     isUpdatingFromEditorRef.current = false;
 
-    setContent(nextContent);
-    contentRef.current = nextContent;
-    lastSavedContentRef.current = nextContent;
-    if (editor) {
-      editor.commands.setContent(nextContent);
+    const parsed = parseFrontmatter(nextContent);
+    if (parsed.frontmatter && parsed.rawYaml) {
+      currentRawFrontmatterRef.current = parsed.rawYaml;
+      const normalizedContent = `--- \n${parsed.rawYaml}\n---\n\n${parsed.body.replace(/^\n+/, '')}`;
+      setContent(normalizedContent);
+      contentRef.current = normalizedContent;
+      lastSavedContentRef.current = normalizedContent;
+      if (editor) {
+        editor.commands.setContent(parsed.body);
+      }
+    } else {
+      currentRawFrontmatterRef.current = null;
+      setContent(nextContent);
+      contentRef.current = nextContent;
+      lastSavedContentRef.current = nextContent;
+      if (editor) {
+        editor.commands.setContent(nextContent);
+      }
     }
   };
 
   const applyDocumentContentEdit = (nextContent: string) => {
-    setContent(nextContent);
-    contentRef.current = nextContent;
-    if (editor) {
-      editor.commands.setContent(nextContent);
+    const parsed = parseFrontmatter(nextContent);
+    if (parsed.frontmatter && parsed.rawYaml) {
+      currentRawFrontmatterRef.current = parsed.rawYaml;
+      const normalizedContent = `--- \n${parsed.rawYaml}\n---\n\n${parsed.body.replace(/^\n+/, '')}`;
+      setContent(normalizedContent);
+      contentRef.current = normalizedContent;
+      if (editor) {
+        editor.commands.setContent(parsed.body);
+      }
+    } else {
+      currentRawFrontmatterRef.current = null;
+      setContent(nextContent);
+      contentRef.current = nextContent;
+      if (editor) {
+        editor.commands.setContent(nextContent);
+      }
     }
   };
 
@@ -2709,9 +2741,7 @@ function AppContent() {
     if (!externalModifiedPath) return;
     try {
       const diskContent = await readNativeFile(externalModifiedPath);
-      contentRef.current = diskContent;
-      setContent(diskContent);
-      editor?.commands?.setContent(diskContent);
+      syncDocumentContent(diskContent);
       const mtime = await getNativeFileMtime(externalModifiedPath);
       lastKnownMtimeRef.current = mtime;
       lastSavedContentRef.current = diskContent;
@@ -2741,9 +2771,7 @@ function AppContent() {
   };
 
   const handleRestoreFromTimeline = (restoredContent: string) => {
-    contentRef.current = restoredContent;
-    setContent(restoredContent);
-    editor?.commands?.setContent(restoredContent);
+    syncDocumentContent(restoredContent);
   };
 
   return (

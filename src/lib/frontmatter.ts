@@ -20,15 +20,44 @@ export function parseFrontmatter(markdown: string): ParsedMarkdown {
     return { frontmatter: null, rawYaml: null, body: markdown };
   }
 
+  // 1. Standard YAML frontmatter
   const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
-  if (!match) {
-    return { frontmatter: null, rawYaml: null, body: markdown };
+  if (match) {
+    const rawYaml = match[1];
+    const body = markdown.slice(match[0].length);
+    const data = parseYamlString(rawYaml);
+    return { frontmatter: Object.keys(data).length > 0 ? data : null, rawYaml, body };
   }
 
-  const rawYaml = match[1];
-  const body = markdown.slice(match[0].length);
-  const data: FrontmatterData = {};
+  // 2. Corrupted Setext heading frontmatter (e.g. from previous tiptap auto-save)
+  const corruptedMatch = markdown.match(/^---\r?\n\s*##\s*(title:\s*["'][^"']+["'][\s\S]*?)(?=\r?\n#|\r?\n\r?\n|$)/i);
+  if (corruptedMatch) {
+    const rawText = corruptedMatch[1];
+    const body = markdown.slice(corruptedMatch[0].length).replace(/^[\r\n]+/, '');
+    const data = parseCorruptedYamlInline(rawText);
+    const reconstructedYaml = Object.entries(data)
+      .map(([k, v]) => `${k}: "${v}"`)
+      .join('\n');
+    return { frontmatter: data, rawYaml: reconstructedYaml, body };
+  }
 
+  return { frontmatter: null, rawYaml: null, body: markdown };
+}
+
+function parseCorruptedYamlInline(text: string): FrontmatterData {
+  const data: FrontmatterData = {};
+  const regex = /([\w_-]+):\s*(?:"([^"]*)"|'([^']*)'|([^\s"']+))/g;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    const key = m[1];
+    const val = m[2] !== undefined ? m[2] : m[3] !== undefined ? m[3] : m[4];
+    data[key] = val;
+  }
+  return data;
+}
+
+function parseYamlString(rawYaml: string): FrontmatterData {
+  const data: FrontmatterData = {};
   const lines = rawYaml.split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
@@ -54,8 +83,7 @@ export function parseFrontmatter(markdown: string): ParsedMarkdown {
       data[key] = val;
     }
   }
-
-  return { frontmatter: data, rawYaml, body };
+  return data;
 }
 
 export function stringifyFrontmatter(data: FrontmatterData, body: string): string {

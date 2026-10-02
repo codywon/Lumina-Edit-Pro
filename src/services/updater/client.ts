@@ -3,7 +3,7 @@ import { getNativeInvoke } from '../native';
 import { CurrentExeInfo, DownloadProgress, ReleaseInfo, UpdateCheckResult } from './types';
 import { isNewerVersion } from './version';
 
-export const CURRENT_APP_VERSION = '1.1.2';
+export const CURRENT_APP_VERSION = '1.1.3';
 export const DEFAULT_UPDATE_FEED_URL = 'https://api.github.com/repos/codywon/Lumina-Edit-Pro/releases/latest';
 
 export async function getCurrentExeInfo(): Promise<CurrentExeInfo | null> {

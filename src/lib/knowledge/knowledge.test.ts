@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseFrontmatter } from '../frontmatter';
 import {
   buildFrontmatter,
   convertHtmlToMarkdown,
@@ -305,6 +306,22 @@ describe('Knowledge Sources & Web Clipper', () => {
       expect(prepared.suggestedFileName).toBe('[微信公众号] DeepSeek R1 深度技术剖析.md');
       expect(prepared.fullMarkdown).toContain('title: "DeepSeek R1 深度技术剖析"');
       expect(prepared.fullMarkdown).toContain('正文深度内容...');
+    });
+
+    it('correctly recovers and parses pseudo-heading corrupted frontmatter', async () => {
+      const corrupted = `---
+
+## title: "Hugging Face趋势榜第一" author: "黑虾" publish_date: "2026-09-22"
+
+# Hugging Face趋势榜第一
+
+> **作者**：黑虾
+`;
+      const res = parseFrontmatter(corrupted);
+      expect(res.frontmatter).not.toBeNull();
+      expect(res.frontmatter?.title).toBe('Hugging Face趋势榜第一');
+      expect(res.frontmatter?.author).toBe('黑虾');
+      expect(res.body.trim().startsWith('# Hugging Face趋势榜第一')).toBe(true);
     });
   });
 });

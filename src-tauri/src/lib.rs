@@ -807,7 +807,7 @@ async fn network_fetch_text(payload: NetworkFetchPayload) -> Result<NetworkFetch
 
     let mut req = client.get(&payload.url).header(
         "User-Agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
     );
 
     if let Some(headers) = payload.headers {
@@ -845,7 +845,7 @@ async fn network_download_asset(payload: NetworkDownloadPayload) -> Result<Netwo
 
     let mut req = client.get(&payload.url).header(
         "User-Agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
     );
 
     if let Some(headers) = payload.headers {

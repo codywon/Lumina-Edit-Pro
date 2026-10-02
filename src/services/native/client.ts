@@ -143,17 +143,25 @@ export async function networkFetchText(payload: NetworkFetchPayload): Promise<Ne
     return await invoke<NetworkFetchResult>('network_fetch_text', { payload });
   }
 
-  const res = await fetch(payload.url, {
-    headers: payload.headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-  const content = await res.text();
-  return {
-    status: res.status,
-    content,
-    contentType: res.headers.get('content-type') || '',
-    finalUrl: res.url || payload.url,
-  };
+  try {
+    const res = await fetch(payload.url, {
+      headers: payload.headers,
+      signal: controller.signal,
+    });
+
+    const content = await res.text();
+    return {
+      status: res.status,
+      content,
+      contentType: res.headers.get('content-type') || '',
+      finalUrl: res.url || payload.url,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function networkDownloadAsset(payload: NetworkDownloadPayload): Promise<NetworkDownloadResult> {
@@ -162,17 +170,25 @@ export async function networkDownloadAsset(payload: NetworkDownloadPayload): Pro
     return await invoke<NetworkDownloadResult>('network_download_asset', { payload });
   }
 
-  const res = await fetch(payload.url, {
-    headers: payload.headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-  const arrayBuf = await res.arrayBuffer();
-  const bytes = Array.from(new Uint8Array(arrayBuf));
-  return {
-    status: res.status,
-    contentType: res.headers.get('content-type') || '',
-    size: bytes.length,
-    bytes,
-    savedPath: payload.targetFilePath,
-  };
+  try {
+    const res = await fetch(payload.url, {
+      headers: payload.headers,
+      signal: controller.signal,
+    });
+
+    const arrayBuf = await res.arrayBuffer();
+    const bytes = Array.from(new Uint8Array(arrayBuf));
+    return {
+      status: res.status,
+      contentType: res.headers.get('content-type') || '',
+      size: bytes.length,
+      bytes,
+      savedPath: payload.targetFilePath,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

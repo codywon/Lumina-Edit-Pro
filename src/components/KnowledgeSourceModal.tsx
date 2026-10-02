@@ -16,6 +16,7 @@ import {
 import { cn } from '../lib/utils';
 import {
   detectPlatform,
+  extractArticleFromHtml,
   extractArticleFromUrl,
   getPlatformLabel,
   prepareClippedDocument,
@@ -44,7 +45,9 @@ export default function KnowledgeSourceModal({
   documentFilePath,
   hasActiveWorkspace = false,
 }: KnowledgeSourceModalProps) {
+  const [inputMode, setInputMode] = useState<'url' | 'html'>('url');
   const [url, setUrl] = useState('');
+  const [htmlContent, setHtmlContent] = useState('');
   const [detectedPlatform, setDetectedPlatform] = useState<KnowledgePlatform>('generic');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -63,6 +66,8 @@ export default function KnowledgeSourceModal({
   useEffect(() => {
     if (!isOpen) {
       setUrl('');
+      setHtmlContent('');
+      setInputMode('url');
       setArticle(null);
       setExtractError(null);
       setIsExtracting(false);
@@ -86,10 +91,19 @@ export default function KnowledgeSourceModal({
   }, [isOpen, isExtracting, isSaving, onClose]);
 
   const handleUrlChange = (value: string) => {
+    const trimmed = value.trim();
+    // Auto-detect if user accidentally pasted raw HTML into the URL input
+    if (trimmed.startsWith('<') || (trimmed.includes('<html') || trimmed.includes('<div') || trimmed.includes('<p>'))) {
+      setInputMode('html');
+      setHtmlContent(value);
+      setExtractError(null);
+      return;
+    }
+
     setUrl(value);
     setExtractError(null);
-    if (value.trim()) {
-      setDetectedPlatform(detectPlatform(value.trim()));
+    if (trimmed) {
+      setDetectedPlatform(detectPlatform(trimmed));
     } else {
       setDetectedPlatform('generic');
     }
@@ -99,11 +113,19 @@ export default function KnowledgeSourceModal({
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         const text = await navigator.clipboard.readText();
-        if (text && (text.startsWith('http://') || text.startsWith('https://'))) {
-          handleUrlChange(text.trim());
-          showToast('已从剪贴板读取链接', 'info');
-        } else if (text) {
-          handleUrlChange(text.trim());
+        if (text) {
+          const trimmed = text.trim();
+          if (trimmed.startsWith('<') || (trimmed.includes('<html') || trimmed.includes('<div') || trimmed.includes('<p>'))) {
+            setInputMode('html');
+            setHtmlContent(text);
+            showToast('检测到剪贴板包含 HTML 图文源码，已切换至内容模式', 'info');
+          } else if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+            setInputMode('url');
+            handleUrlChange(trimmed);
+            showToast('已从剪贴板读取文章链接', 'info');
+          } else {
+            handleUrlChange(trimmed);
+          }
         }
       }
     } catch {
@@ -112,6 +134,35 @@ export default function KnowledgeSourceModal({
   };
 
   const handleExtract = async () => {
+    if (inputMode === 'html') {
+      const cleanHtml = htmlContent.trim();
+      if (!cleanHtml) {
+        setExtractError('请输入或粘贴网页 HTML 源码或正文');
+        return;
+      }
+
+      try {
+        setIsExtracting(true);
+        setExtractError(null);
+        setArticle(null);
+
+        const extracted = extractArticleFromHtml(cleanHtml, {
+          sourceUrl: url.trim() || undefined,
+          platform: url.trim() ? detectPlatform(url.trim()) : 'generic',
+        });
+        setArticle(extracted);
+        setEditedTitle(extracted.metadata.title);
+        showToast(`已成功解析内容: ${extracted.metadata.title}`, 'info');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setExtractError(`解析失败: ${msg}`);
+        showToast('解析 HTML 内容失败，请检查格式', 'error');
+      } finally {
+        setIsExtracting(false);
+      }
+      return;
+    }
+
     const cleanUrl = url.trim();
     if (!cleanUrl) {
       setExtractError('请输入有效的网页或文章链接');
@@ -252,68 +303,174 @@ export default function KnowledgeSourceModal({
 
           {/* Body Content */}
           <div className="p-6 overflow-y-auto space-y-5 flex-1">
-            {/* URL Input */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
-                  <span>目标网页链接</span>
-                  {url.trim() && (
-                    <span
-                      className={cn(
-                        'text-[10px] px-1.5 py-0.5 rounded border uppercase font-medium',
-                        platformBadgeStyles[detectedPlatform]
-                      )}
-                    >
-                      {getPlatformLabel(detectedPlatform)}
-                    </span>
+            {/* Input Mode Selector */}
+            <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-800 pb-2">
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInputMode('url');
+                    setExtractError(null);
+                  }}
+                  className={cn(
+                    'text-xs font-semibold pb-1.5 transition-colors relative',
+                    inputMode === 'url'
+                      ? 'text-orange-600 dark:text-orange-400'
+                      : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
                   )}
-                </label>
-                <button
-                  type="button"
-                  onClick={handlePasteClipboard}
-                  className="text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1"
                 >
-                  <Clipboard className="w-3.5 h-3.5" />
-                  从剪贴板粘贴
+                  输入网址解析
+                  {inputMode === 'url' && (
+                    <motion.div
+                      layoutId="activeTabUnderline"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500 rounded-full"
+                    />
+                  )}
                 </button>
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => handleUrlChange(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
-                  placeholder="https://mp.weixin.qq.com/... 或 小红书 / 飞书链接..."
-                  className="flex-1 px-3.5 py-2.5 text-sm bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700/80 rounded-lg text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                />
                 <button
                   type="button"
-                  onClick={handleExtract}
-                  disabled={isExtracting || !url.trim()}
-                  className="px-4 py-2.5 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm shadow-orange-500/10 flex items-center gap-1.5 transition-all"
+                  onClick={() => {
+                    setInputMode('html');
+                    setExtractError(null);
+                  }}
+                  className={cn(
+                    'text-xs font-semibold pb-1.5 transition-colors relative flex items-center gap-1',
+                    inputMode === 'html'
+                      ? 'text-orange-600 dark:text-orange-400'
+                      : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+                  )}
                 >
-                  {isExtracting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>解析中...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>解析链接</span>
-                    </>
+                  <span>粘贴网页内容 / 源码</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500">
+                    免验证码兜底
+                  </span>
+                  {inputMode === 'html' && (
+                    <motion.div
+                      layoutId="activeTabUnderline"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500 rounded-full"
+                    />
                   )}
                 </button>
               </div>
 
-              {extractError && (
-                <div className="flex items-center gap-1.5 text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-200 dark:border-rose-900/50">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{extractError}</span>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={handlePasteClipboard}
+                className="text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1"
+              >
+                <Clipboard className="w-3.5 h-3.5" />
+                从剪贴板粘贴
+              </button>
             </div>
+
+            {/* Input Box */}
+            {inputMode === 'url' ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
+                    <span>目标文章或网页链接</span>
+                    {url.trim() && (
+                      <span
+                        className={cn(
+                          'text-[10px] px-1.5 py-0.5 rounded border uppercase font-medium',
+                          platformBadgeStyles[detectedPlatform]
+                        )}
+                      >
+                        {getPlatformLabel(detectedPlatform)}
+                      </span>
+                    )}
+                  </label>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => handleUrlChange(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
+                    placeholder="https://mp.weixin.qq.com/... 或 小红书 / 飞书链接..."
+                    className="flex-1 px-3.5 py-2.5 text-sm bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700/80 rounded-lg text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleExtract}
+                    disabled={isExtracting || !url.trim()}
+                    className="px-4 py-2.5 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm shadow-orange-500/10 flex items-center gap-1.5 transition-all"
+                  >
+                    {isExtracting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>解析中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>解析链接</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {extractError && (
+                  <div className="flex flex-col gap-1 text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{extractError}</span>
+                    </div>
+                    {extractError.includes('环境异常') && (
+                      <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1 pl-5">
+                        💡 提示：如遇微信极度风控验证码，您只需在浏览器打开文章，按 <kbd className="px-1 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded font-mono">Ctrl+A</kbd> 复制网页内容，切换到上方【粘贴网页内容/源码】即可 100% 完整解析与离线转存图片。
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300 flex items-center justify-between">
+                  <span>粘贴网页 HTML 源码或富文本</span>
+                  <span className="text-[11px] text-neutral-400 font-normal">
+                    支持在微信/浏览器中按 Ctrl+A 复制后直接粘贴于此
+                  </span>
+                </label>
+                <textarea
+                  value={htmlContent}
+                  onChange={(e) => {
+                    setHtmlContent(e.target.value);
+                    setExtractError(null);
+                  }}
+                  rows={4}
+                  placeholder="在此处直接粘贴从浏览器/公众号复制的网页源码或富文本内容..."
+                  className="w-full px-3.5 py-2 text-xs bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700/80 rounded-lg text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 font-mono focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleExtract}
+                    disabled={isExtracting || !htmlContent.trim()}
+                    className="px-4 py-2 text-xs font-medium text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm shadow-orange-500/10 flex items-center gap-1.5 transition-all"
+                  >
+                    {isExtracting ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>正在解析图文...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>解析内容并提取图片</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {extractError && (
+                  <div className="flex items-center gap-1.5 text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{extractError}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Extracted Article Preview */}
             {article && (

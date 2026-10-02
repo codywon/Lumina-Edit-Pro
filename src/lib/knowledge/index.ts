@@ -3,7 +3,9 @@ import { GenericWebAdapter } from './adapters/generic';
 import { WechatAdapter } from './adapters/wechat';
 import { XiaohongshuAdapter } from './adapters/xiaohongshu';
 import { localizeMarkdownAssets } from './assetLocalizer';
+import { parseHtmlToDocument } from './domHelper';
 import { buildFrontmatter } from './frontmatter';
+import { convertHtmlToMarkdown } from './htmlToMarkdown';
 import type {
   AssetLocalizationResult,
   ExtractedArticle,
@@ -71,6 +73,93 @@ export async function extractArticleFromUrl(url: string, rawHtml?: string): Prom
   }
 
   throw new Error(`无法识别该链接对应的解析适配器: ${cleanUrl}`);
+}
+
+/**
+ * Extract article from raw HTML content (e.g. copied from browser, DevTools, or desktop client)
+ */
+export function extractArticleFromHtml(
+  rawHtml: string,
+  options: { sourceUrl?: string; platform?: KnowledgePlatform; fallbackTitle?: string } = {}
+): ExtractedArticle {
+  const cleanHtml = rawHtml.trim();
+  if (!cleanHtml) {
+    throw new Error('HTML 内容为空');
+  }
+
+  const doc = parseHtmlToDocument(cleanHtml);
+  const platform = options.platform || (options.sourceUrl ? detectPlatform(options.sourceUrl) : 'generic');
+
+  const title =
+    doc.querySelector('#activity-name')?.textContent?.trim() ||
+    doc.querySelector('.docx-title')?.textContent?.trim() ||
+    doc.querySelector('h1')?.textContent?.trim() ||
+    doc.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim() ||
+    doc.title?.replace(/- 微信公众平台$/, '').trim() ||
+    options.fallbackTitle ||
+    '剪贴板图文内容';
+
+  const author =
+    doc.querySelector('#js_name')?.textContent?.trim() ||
+    doc.querySelector('.author-name')?.textContent?.trim() ||
+    doc.querySelector('meta[name="author"]')?.getAttribute('content')?.trim() ||
+    doc.querySelector('.profile_nickname')?.textContent?.trim() ||
+    '';
+
+  const contentEl = (
+    doc.querySelector('#js_content') ||
+    doc.querySelector('.docx-page') ||
+    doc.querySelector('article') ||
+    doc.querySelector('main') ||
+    doc.body
+  ).cloneNode(true) as HTMLElement;
+
+  // Remove noise
+  const noise = [
+    '#js_toobar',
+    '.qr_code_pc',
+    '.reward_area',
+    '.profile_container',
+    '.rich_media_tool',
+    '#js_pc_qr_code',
+    '.original_area_primary',
+    '#js_tags',
+    'script',
+    'style',
+  ];
+  noise.forEach((sel) => {
+    contentEl.querySelectorAll(sel).forEach((el) => el.remove());
+  });
+
+  // Normalize lazy images (e.g. WeChat data-src)
+  const images: string[] = [];
+  contentEl.querySelectorAll('img').forEach((img) => {
+    const src =
+      img.getAttribute('data-src') ||
+      img.getAttribute('data-original-src') ||
+      img.getAttribute('src');
+
+    if (src && !src.startsWith('data:')) {
+      img.setAttribute('src', src);
+      if (!images.includes(src)) images.push(src);
+    }
+  });
+
+  const markdown = convertHtmlToMarkdown(contentEl, { baseUrl: options.sourceUrl }).trim();
+
+  const metadata: KnowledgeMetadata = {
+    title,
+    author: author || undefined,
+    sourceUrl: options.sourceUrl || '',
+    platform,
+    clippedAt: new Date().toISOString(),
+  };
+
+  return {
+    metadata,
+    markdown,
+    images,
+  };
 }
 
 export interface PrepareClippedDocumentOptions extends LocalizeAssetsOptions {

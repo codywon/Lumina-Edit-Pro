@@ -169,7 +169,7 @@ function processNode(node: Node, ctx: Context): string {
       return '';
     }
 
-    const alt = el.getAttribute('alt') || el.getAttribute('title') || 'image';
+    const alt = el.getAttribute('alt') || el.getAttribute('title') || '';
     return `\n\n![${alt}](${resolveUrl(src, ctx.baseUrl)})\n\n`;
   }
 

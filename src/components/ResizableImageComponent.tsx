@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NodeViewWrapper, NodeViewProps } from '@tiptap/react';
-import { AlignLeft, AlignCenter, AlignRight, Trash2 } from 'lucide-react';
+import { AlignLeft, AlignCenter, AlignRight, Trash2, Image as ImageIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { resolveImageSrc, readLocalImageBase64 } from '../lib/imageResolver';
 
 export default function ResizableImageComponent({
   node,
@@ -15,6 +16,35 @@ export default function ResizableImageComponent({
   const startXRef = useRef<number>(0);
 
   const { src, alt, title, width, alignment } = node.attrs;
+
+  const [displaySrc, setDisplaySrc] = useState<string>(() => resolveImageSrc(src));
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setDisplaySrc(resolveImageSrc(src));
+    setHasError(false);
+  }, [src]);
+
+  useEffect(() => {
+    const handleDocChanged = () => {
+      setDisplaySrc(resolveImageSrc(src));
+    };
+    window.addEventListener('lumina:document-path-changed', handleDocChanged);
+    return () => window.removeEventListener('lumina:document-path-changed', handleDocChanged);
+  }, [src]);
+
+  const handleImageError = async () => {
+    // If not already base64, try fallback via native rust read
+    if (!displaySrc.startsWith('data:')) {
+      const fallbackDataUrl = await readLocalImageBase64(src);
+      if (fallbackDataUrl) {
+        setDisplaySrc(fallbackDataUrl);
+        setHasError(false);
+        return;
+      }
+    }
+    setHasError(true);
+  };
 
   const formattedWidth = width
     ? isNaN(Number(width))
@@ -78,14 +108,22 @@ export default function ResizableImageComponent({
         )}
         style={{ width: formattedWidth === 'auto' ? undefined : '100%' }}
       >
-        <img
-          src={src}
-          alt={alt || ''}
-          title={title || ''}
-          draggable={false}
-          className="inline-block align-middle max-w-full h-auto object-contain"
-          style={{ width: formattedWidth === 'auto' ? undefined : '100%' }}
-        />
+        {hasError ? (
+          <span className="flex items-center gap-1.5 px-3 py-2 rounded border border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900/50 text-neutral-500 text-xs my-1">
+            <ImageIcon className="w-4 h-4 text-neutral-400 shrink-0" />
+            <span>无法加载图片: {alt || src}</span>
+          </span>
+        ) : (
+          <img
+            src={displaySrc}
+            alt={alt || ''}
+            title={title || ''}
+            draggable={false}
+            onError={handleImageError}
+            className="inline-block align-middle max-w-full h-auto object-contain rounded"
+            style={{ width: formattedWidth === 'auto' ? undefined : '100%' }}
+          />
+        )}
 
         {/* Quick Toolbar ONLY when explicitly selected or resizing */}
         {(selected || isResizing) && (

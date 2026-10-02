@@ -108,6 +108,12 @@ pub struct NetworkDownloadPayload {
     pub target_file_path: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadAssetDataUrlPayload {
+    pub path: String,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkDownloadResult {
@@ -893,6 +899,33 @@ async fn network_download_asset(payload: NetworkDownloadPayload) -> Result<Netwo
 }
 
 #[tauri::command]
+fn app_read_asset_data_url(payload: ReadAssetDataUrlPayload) -> Result<String, String> {
+    let p = Path::new(&payload.path);
+    if !p.exists() {
+        return Err(format!("File does not exist: {}", payload.path));
+    }
+    let bytes = fs::read(p).map_err(|e| format!("Failed to read asset: {}", e))?;
+    let ext = p
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "avif" => "image/avif",
+        _ => "application/octet-stream",
+    };
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
+    Ok(format!("data:{};base64,{}", mime, BASE64.encode(&bytes)))
+}
+
+#[tauri::command]
 fn app_open_user_manual() -> Result<(), String> {
     let temp_file = std::env::temp_dir().join("Lumina-Edit-Pro-用户手册.html");
     let _ = fs::write(&temp_file, EMBEDDED_USER_MANUAL_HTML);
@@ -970,6 +1003,7 @@ pub fn run() {
             workspace_write_binary,
             network_fetch_text,
             network_download_asset,
+            app_read_asset_data_url,
             app_open_user_manual
         ])
         .run(tauri::generate_context!())

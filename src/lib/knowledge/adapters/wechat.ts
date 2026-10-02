@@ -150,10 +150,22 @@ export class WechatAdapter implements KnowledgeAdapter {
     });
 
     // 3. Convert to Markdown
-    let markdown = convertHtmlToMarkdown(contentEl, { baseUrl: url });
+    let bodyMarkdown = convertHtmlToMarkdown(contentEl, { baseUrl: url }).trim();
 
-    // Clean up excessive blank lines
-    markdown = markdown.trim();
+    let metaHeader = '';
+    if (author) {
+      metaHeader += `> **作者**：${author}`;
+    }
+    if (publishDate) {
+      metaHeader += metaHeader ? ` · **发布时间**：${publishDate}` : `> **发布时间**：${publishDate}`;
+    }
+
+    let markdown = '';
+    if (title && !bodyMarkdown.startsWith('# ')) {
+      markdown = metaHeader ? `# ${title}\n\n${metaHeader}\n\n${bodyMarkdown}` : `# ${title}\n\n${bodyMarkdown}`;
+    } else {
+      markdown = metaHeader ? `${metaHeader}\n\n${bodyMarkdown}` : bodyMarkdown;
+    }
 
     const metadata: KnowledgeMetadata = {
       title,

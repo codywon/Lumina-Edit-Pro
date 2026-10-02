@@ -39,6 +39,7 @@ import { matchShortcut } from './lib/shortcuts';
 import { clearWorkspaceHandle, loadWorkspaceHandle, saveWorkspaceHandle } from './lib/workspacePersistence';
 import { AIProvider } from './contexts/AIContext';
 import { checkForUpdate, type ReleaseInfo } from './services/updater';
+import { setActiveDocumentPathInfo } from './lib/imageResolver';
 
 // Lazy-loaded modal components (deferred until explicitly opened)
 const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
@@ -644,6 +645,30 @@ function AppContent() {
   useEffect(() => {
     activeWorkspaceFilePathRef.current = activeWorkspaceFilePath;
   }, [activeWorkspaceFilePath]);
+
+  // Sync document directory and workspace root for resolving relative images
+  useEffect(() => {
+    let wsRoot: string | null = null;
+    let docDir: string | null = null;
+
+    if (isNativeWorkspaceDirectoryHandle(workspaceDirectoryHandle)) {
+      wsRoot = workspaceDirectoryHandle.rootPath;
+      if (activeWorkspaceFilePath) {
+        const segs = activeWorkspaceFilePath.replace(/\\/g, '/').split('/').filter(Boolean);
+        segs.pop();
+        docDir = segs.length > 0 ? `${wsRoot}/${segs.join('/')}` : wsRoot;
+      } else {
+        docDir = wsRoot;
+      }
+    } else if (isNativeFileHandle(activeFileHandle)) {
+      const p = activeFileHandle.path.replace(/\\/g, '/');
+      const segs = p.split('/').filter(Boolean);
+      segs.pop();
+      docDir = segs.join('/');
+    }
+
+    setActiveDocumentPathInfo({ workspaceRoot: wsRoot, documentDir: docDir });
+  }, [workspaceDirectoryHandle, activeWorkspaceFilePath, activeFileHandle]);
 
   // Auto-save effect (only runs when autoSave is enabled AND content has actually changed)
   useEffect(() => {

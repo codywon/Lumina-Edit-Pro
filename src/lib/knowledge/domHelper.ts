@@ -7,13 +7,24 @@ export function parseHtmlToDocument(html: string): Document {
     return parser.parseFromString(html, 'text/html');
   }
 
-  // Node.js test fallback
+  // Node.js / test fallback
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { JSDOM } = require('jsdom');
+    const req = typeof require !== 'undefined' ? require : (eval('require') as NodeRequire);
+    const { JSDOM } = req('jsdom');
     const dom = new JSDOM(html);
     return dom.window.document;
   } catch {
-    throw new Error('No DOM parser available in current environment');
+    // ESM fallback
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createRequire } = eval('require("module")');
+      const customReq = createRequire(import.meta.url);
+      const { JSDOM } = customReq('jsdom');
+      const dom = new JSDOM(html);
+      return dom.window.document;
+    } catch {
+      throw new Error('No DOM parser available in current environment');
+    }
   }
 }

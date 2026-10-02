@@ -1,4 +1,13 @@
-import type { DefaultEditorResult, NativeAppHealth, NativeCliFile, NativeInvokeClient } from './types';
+import type {
+  DefaultEditorResult,
+  NativeAppHealth,
+  NativeCliFile,
+  NativeInvokeClient,
+  NetworkDownloadPayload,
+  NetworkDownloadResult,
+  NetworkFetchPayload,
+  NetworkFetchResult,
+} from './types';
 import { isTauriRuntime } from './environment';
 import { getNativeInvoke } from './invoke';
 
@@ -126,4 +135,44 @@ export async function setNativeAsDefaultEditor(): Promise<DefaultEditorResult> {
 
 export async function openNativeDefaultAppsSettings(): Promise<void> {
   await nativeClient.openDefaultAppsSettings();
+}
+
+export async function networkFetchText(payload: NetworkFetchPayload): Promise<NetworkFetchResult> {
+  if (isTauriRuntime()) {
+    const invoke = getNativeInvoke();
+    return await invoke<NetworkFetchResult>('network_fetch_text', { payload });
+  }
+
+  const res = await fetch(payload.url, {
+    headers: payload.headers,
+  });
+
+  const content = await res.text();
+  return {
+    status: res.status,
+    content,
+    contentType: res.headers.get('content-type') || '',
+    finalUrl: res.url || payload.url,
+  };
+}
+
+export async function networkDownloadAsset(payload: NetworkDownloadPayload): Promise<NetworkDownloadResult> {
+  if (isTauriRuntime()) {
+    const invoke = getNativeInvoke();
+    return await invoke<NetworkDownloadResult>('network_download_asset', { payload });
+  }
+
+  const res = await fetch(payload.url, {
+    headers: payload.headers,
+  });
+
+  const arrayBuf = await res.arrayBuffer();
+  const bytes = Array.from(new Uint8Array(arrayBuf));
+  return {
+    status: res.status,
+    contentType: res.headers.get('content-type') || '',
+    size: bytes.length,
+    bytes,
+    savedPath: payload.targetFilePath,
+  };
 }

@@ -37,16 +37,16 @@ describe('Updater: Check for Updates Client', () => {
 
   it('detects a newer version from GitHub release payload', async () => {
     const mockRelease = {
-      tag_name: 'v1.0.1',
-      name: 'Lumina Edit Pro v1.0.1',
+      tag_name: 'v1.2.0',
+      name: 'Lumina Edit Pro v1.2.0',
       body: '### New features\n- Auto-update support',
       published_at: '2026-09-28T12:00:00Z',
-      html_url: 'https://github.com/codywon/Lumina-Edit-Pro/releases/tag/v1.0.1',
+      html_url: 'https://github.com/codywon/Lumina-Edit-Pro/releases/tag/v1.2.0',
       assets: [
         {
           name: 'Lumina-Edit-Pro.exe',
           size: 14500000,
-          browser_download_url: 'https://github.com/codywon/Lumina-Edit-Pro/releases/download/v1.0.1/Lumina-Edit-Pro.exe',
+          browser_download_url: 'https://github.com/codywon/Lumina-Edit-Pro/releases/download/v1.2.0/Lumina-Edit-Pro.exe',
         },
       ],
     };
@@ -61,15 +61,15 @@ describe('Updater: Check for Updates Client', () => {
 
     expect(result.hasUpdate).toBe(true);
     expect(result.currentVersion).toBe(CURRENT_APP_VERSION);
-    expect(result.latestRelease?.version).toBe('1.0.1');
+    expect(result.latestRelease?.version).toBe('1.2.0');
     expect(result.latestRelease?.assetName).toBe('Lumina-Edit-Pro.exe');
     expect(result.latestRelease?.assetSize).toBe(14500000);
   });
 
   it('recognizes when current version is already up to date', async () => {
     const mockRelease = {
-      tag_name: 'v1.0.0',
-      name: 'Lumina Edit Pro v1.0.0',
+      tag_name: 'v1.1.0',
+      name: 'Lumina Edit Pro v1.1.0',
       body: 'Initial release',
       assets: [],
     };
@@ -83,7 +83,7 @@ describe('Updater: Check for Updates Client', () => {
     const result = await checkForUpdate();
 
     expect(result.hasUpdate).toBe(false);
-    expect(result.latestRelease?.version).toBe('1.0.0');
+    expect(result.latestRelease?.version).toBe('1.1.0');
   });
 
   it('handles 404 or network errors gracefully with informative message', async () => {

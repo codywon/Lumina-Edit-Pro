@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Sparkles, Search, ChevronUp, ChevronDown, Minus, Square, X } from 'lucide-react';
+import { Sparkles, Globe, Search, ChevronUp, ChevronDown, Minus, Square, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSettings } from '../contexts/SettingsContext';
 import { marked } from 'marked';
@@ -46,6 +46,7 @@ interface HeaderProps {
   onOpenManual?: () => void;
   onOpenExportDocx?: () => void;
   onOpenTimeline?: () => void;
+  onOpenKnowledgeSource?: () => void;
   onCheckUpdate?: () => void;
 }
 
@@ -85,6 +86,7 @@ function HeaderComponent({
   onOpenManual,
   onOpenExportDocx,
   onOpenTimeline,
+  onOpenKnowledgeSource,
   onCheckUpdate,
 }: HeaderProps) {
   const { settings } = useSettings();
@@ -349,6 +351,7 @@ function HeaderComponent({
       label: '文件',
       items: [
         { label: '快速打开...', shortcut: 'Ctrl+P', action: () => onQuickOpen?.() },
+        { label: '知识来源与网页剪藏...', shortcut: 'Ctrl+Shift+I', action: () => onOpenKnowledgeSource?.() },
         { label: '新建文件', shortcut: settings.shortcuts.newFile, action: onNewFile },
         { label: '打开文件', shortcut: settings.shortcuts.openFile, action: onOpenFile },
         { label: '保存', shortcut: settings.shortcuts.saveFile, action: onSave },
@@ -747,6 +750,14 @@ function HeaderComponent({
         </form>
 
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onOpenKnowledgeSource?.()}
+            className="p-1.5 rounded-md transition-colors text-slate-500 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+            title="知识来源与网页剪藏 (Ctrl+Shift+I)"
+          >
+            <Globe size={16} />
+          </button>
           {settings.enableAI && (
             <button 
               onClick={() => setAiPanelOpen(!aiPanelOpen)}

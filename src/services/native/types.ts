@@ -15,6 +15,32 @@ export interface NativeCliFile {
   content: string;
 }
 
+export interface NetworkFetchPayload {
+  url: string;
+  headers?: Record<string, string>;
+}
+
+export interface NetworkFetchResult {
+  status: number;
+  content: string;
+  contentType: string;
+  finalUrl: string;
+}
+
+export interface NetworkDownloadPayload {
+  url: string;
+  headers?: Record<string, string>;
+  targetFilePath?: string;
+}
+
+export interface NetworkDownloadResult {
+  status: number;
+  contentType: string;
+  size: number;
+  bytes?: number[];
+  savedPath?: string;
+}
+
 export interface NativeInvokeClient {
   appHealth(): Promise<NativeAppHealth>;
   setWindowTitle(title: string): Promise<void>;

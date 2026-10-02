@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
@@ -80,6 +82,40 @@ pub struct UpdateWriteChunkPayload {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSaveAsPayload {
     pub target_path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkFetchPayload {
+    pub url: String,
+    pub headers: Option<HashMap<String, String>>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkFetchResult {
+    pub status: u16,
+    pub content: String,
+    pub content_type: String,
+    pub final_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkDownloadPayload {
+    pub url: String,
+    pub headers: Option<HashMap<String, String>>,
+    pub target_file_path: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkDownloadResult {
+    pub status: u16,
+    pub content_type: String,
+    pub size: usize,
+    pub bytes: Option<Vec<u8>>,
+    pub saved_path: Option<String>,
 }
 
 // Payloads
@@ -763,6 +799,100 @@ fn app_apply_update_and_restart() -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn network_fetch_text(payload: NetworkFetchPayload) -> Result<NetworkFetchResult, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(25))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let mut req = client.get(&payload.url).header(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    );
+
+    if let Some(headers) = payload.headers {
+        for (k, v) in headers {
+            req = req.header(k, v);
+        }
+    }
+
+    let resp = req.send().await.map_err(|e| format!("Network request failed: {}", e))?;
+    let status = resp.status().as_u16();
+    let final_url = resp.url().to_string();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    let content = resp.text().await.map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    Ok(NetworkFetchResult {
+        status,
+        content,
+        content_type,
+        final_url,
+    })
+}
+
+#[tauri::command]
+async fn network_download_asset(payload: NetworkDownloadPayload) -> Result<NetworkDownloadResult, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let mut req = client.get(&payload.url).header(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    );
+
+    if let Some(headers) = payload.headers {
+        for (k, v) in headers {
+            req = req.header(k, v);
+        }
+    }
+
+    let resp = req.send().await.map_err(|e| format!("Asset download request failed: {}", e))?;
+    let status = resp.status().as_u16();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    let bytes = resp.bytes().await.map_err(|e| format!("Failed to read asset bytes: {}", e))?;
+    let size = bytes.len();
+
+    let saved_path = if let Some(target_path) = payload.target_file_path {
+        let p = Path::new(&target_path);
+        if let Some(parent) = p.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(p, &bytes).map_err(|e| format!("Failed to write downloaded asset to {}: {}", target_path, e))?;
+        Some(target_path)
+    } else {
+        None
+    };
+
+    let result_bytes = if saved_path.is_some() {
+        None
+    } else {
+        Some(bytes.to_vec())
+    };
+
+    Ok(NetworkDownloadResult {
+        status,
+        content_type,
+        size,
+        bytes: result_bytes,
+        saved_path,
+    })
+}
+
+#[tauri::command]
 fn app_open_user_manual() -> Result<(), String> {
     let temp_file = std::env::temp_dir().join("Lumina-Edit-Pro-用户手册.html");
     let _ = fs::write(&temp_file, EMBEDDED_USER_MANUAL_HTML);
@@ -838,6 +968,8 @@ pub fn run() {
             workspace_delete_entry,
             workspace_reveal_entry,
             workspace_write_binary,
+            network_fetch_text,
+            network_download_asset,
             app_open_user_manual
         ])
         .run(tauri::generate_context!())

@@ -4,6 +4,8 @@ export {
   getNativeCliOpenFile,
   minimizeNativeWindow,
   nativeClient,
+  networkDownloadAsset,
+  networkFetchText,
   openNativeDefaultAppsSettings,
   setNativeAsDefaultEditor,
   setNativeWindowTitle,
@@ -12,5 +14,14 @@ export {
 } from './client';
 export { isTauriRuntime } from './environment';
 export { getNativeInvoke } from './invoke';
-export type { DefaultEditorResult, NativeAppHealth, NativeCliFile, NativeInvokeClient } from './types';
+export type {
+  DefaultEditorResult,
+  NativeAppHealth,
+  NativeCliFile,
+  NativeInvokeClient,
+  NetworkDownloadPayload,
+  NetworkDownloadResult,
+  NetworkFetchPayload,
+  NetworkFetchResult,
+} from './types';
 export type { NativeInvoke } from './invoke';

@@ -48,6 +48,7 @@ const UpdateModal = React.lazy(() => import('./components/UpdateModal'));
 const UserManualModal = React.lazy(() => import('./components/UserManualModal'));
 const ExportModal = React.lazy(() => import('./components/ExportModal'));
 const TimelineModal = React.lazy(() => import('./components/TimelineModal'));
+const KnowledgeSourceModal = React.lazy(() => import('./components/KnowledgeSourceModal'));
 const QuickOpenModal = React.lazy(() => import('./components/QuickOpenModal'));
 const FindReplaceModal = React.lazy(() => import('./components/FindReplaceModal'));
 import {
@@ -537,6 +538,7 @@ function AppContent() {
   const [isResizingAiPanel, setIsResizingAiPanel] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAICenterOpen, setIsAICenterOpen] = useState(false);
+  const [isKnowledgeSourceOpen, setIsKnowledgeSourceOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
@@ -1938,6 +1940,9 @@ function AppContent() {
       if ((event.ctrlKey || event.metaKey) && (event.key === 'h' || event.key === 'H') && !event.shiftKey && !event.altKey) {
         return run(() => setIsFindReplaceOpen(true));
       }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'i' || event.key === 'I') && !event.altKey) {
+        return run(() => setIsKnowledgeSourceOpen(true));
+      }
       if (matchShortcut(event, shortcuts.newFile)) return run(handleNewFile);
       if (matchShortcut(event, shortcuts.openFile)) return run(() => void handleOpenFile());
       if (matchShortcut(event, shortcuts.openPreferences)) return run(() => setIsSettingsOpen(true));
@@ -2089,7 +2094,11 @@ function AppContent() {
 
   const getTargetDirectoryPath = (entry: WorkspaceEntry) =>
     entry.kind === 'directory' ? entry.path : getWorkspaceParentPath(entry.path);
-  const createWorkspaceFileAt = async (directoryPath: string | null, fileNameInput?: string) => {
+  const createWorkspaceFileAt = async (
+    directoryPath: string | null,
+    fileNameInput?: string,
+    fileContentInput?: string
+  ) => {
     if (!workspaceName) {
       showErrorToast('\u8bf7\u5148\u6253\u5f00\u5de5\u4f5c\u533a\u540e\u518d\u65b0\u5efa\u6587\u4ef6');
       return false;
@@ -2115,9 +2124,11 @@ function AppContent() {
         return false;
       }
 
+      const fileContent = typeof fileContentInput === 'string' ? fileContentInput : initialContent;
+
       if (isNativeWorkspaceDirectoryHandle(workspaceDirectoryHandle)) {
         const createdPath = buildWorkspacePath(directoryPath, fileName);
-        await writeNativeWorkspaceFile(workspaceDirectoryHandle.workspaceId, createdPath, initialContent);
+        await writeNativeWorkspaceFile(workspaceDirectoryHandle.workspaceId, createdPath, fileContent);
         const nextEntries = await refreshWorkspace(workspaceDirectoryHandle);
         const createdEntry = findWorkspaceFileEntry(nextEntries, createdPath);
         const fileHandle = createNativeWorkspaceFileHandle(
@@ -2128,9 +2139,9 @@ function AppContent() {
 
         setActiveFileHandle(fileHandle);
         setActiveWorkspaceFilePath(createdEntry?.path ?? createdPath);
-        syncDocumentContent(initialContent);
+        syncDocumentContent(fileContent);
         storeRecentFile(fileName, fileHandle);
-        workspaceContentCacheRef.current.set(createdEntry?.path ?? createdPath, initialContent);
+        workspaceContentCacheRef.current.set(createdEntry?.path ?? createdPath, fileContent);
         return true;
       }
 
@@ -2140,7 +2151,7 @@ function AppContent() {
         return false;
       }
       const fileHandle = await targetHandle.getFileHandle(fileName, { create: true });
-      await writeFile(fileHandle, initialContent);
+      await writeFile(fileHandle, fileContent);
 
       const nextEntries = await refreshWorkspace(workspaceDirectoryHandle);
       const createdPath = buildWorkspacePath(directoryPath, fileName);
@@ -2148,9 +2159,9 @@ function AppContent() {
 
       setActiveFileHandle(fileHandle);
       setActiveWorkspaceFilePath(createdEntry?.path ?? createdPath);
-      syncDocumentContent(initialContent);
+      syncDocumentContent(fileContent);
       storeRecentFile(fileName, fileHandle);
-      workspaceContentCacheRef.current.set(createdEntry?.path ?? createdPath, initialContent);
+      workspaceContentCacheRef.current.set(createdEntry?.path ?? createdPath, fileContent);
       return true;
     } catch (error) {
       console.error('Error creating workspace file:', error);
@@ -2210,6 +2221,27 @@ function AppContent() {
   };
   const handleCreateWorkspaceFile = async (directoryPath: unknown = null, fileNameInput?: string) => {
     return await createWorkspaceFileAt(typeof directoryPath === 'string' ? directoryPath : null, fileNameInput);
+  };
+
+  const handleCreateClippedWorkspaceFile = async (fileName: string, fileContent: string): Promise<boolean> => {
+    if (workspaceDirectoryHandle && workspaceWritable) {
+      return await createWorkspaceFileAt(null, fileName, fileContent);
+    }
+    syncDocumentContent(fileContent);
+    setActiveFileHandle(null);
+    setActiveWorkspaceFilePath(null);
+    showToast(`已成功载入剪藏内容: ${fileName}`, 'info');
+    return true;
+  };
+
+  const handleInsertClippedContent = (markdown: string) => {
+    if (editor) {
+      editor.chain().focus().insertContent(markdown).run();
+      showToast('已成功插入到当前文档', 'info');
+    } else {
+      syncDocumentContent(content + '\n\n' + markdown);
+      showToast('已追加到当前文档末尾', 'info');
+    }
   };
 
   const handleCreateWorkspaceFolder = async (directoryPath: unknown = null, folderNameInput?: string) => {
@@ -2746,6 +2778,7 @@ function AppContent() {
           onOpenManual={() => setIsManualOpen(true)}
           onOpenExportDocx={() => setIsExportDocxModalOpen(true)}
           onOpenTimeline={() => setIsTimelineOpen(true)}
+          onOpenKnowledgeSource={() => setIsKnowledgeSourceOpen(true)}
           onCheckUpdate={() => void handleCheckUpdate(true)}
           onToggleFullscreen={handleToggleFullscreen}
           onToggleFocusMode={handleToggleFocusMode}
@@ -2970,6 +3003,22 @@ function AppContent() {
           <UserManualModal
             isOpen={isManualOpen}
             onClose={() => setIsManualOpen(false)}
+          />
+        )}
+        {isKnowledgeSourceOpen && (
+          <KnowledgeSourceModal
+            isOpen={isKnowledgeSourceOpen}
+            onClose={() => setIsKnowledgeSourceOpen(false)}
+            showToast={showToast}
+            onInsertAtCursor={handleInsertClippedContent}
+            onCreateWorkspaceDocument={handleCreateClippedWorkspaceFile}
+            workspaceId={
+              isNativeWorkspaceDirectoryHandle(workspaceDirectoryHandle)
+                ? workspaceDirectoryHandle.workspaceId
+                : undefined
+            }
+            documentFilePath={activeFileHandle?.path}
+            hasActiveWorkspace={Boolean(workspaceName && workspaceWritable)}
           />
         )}
         {isExportDocxModalOpen && (

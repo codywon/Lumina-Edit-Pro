@@ -3,7 +3,7 @@ import { getNativeInvoke } from '../native';
 import { CurrentExeInfo, DownloadProgress, ReleaseInfo, UpdateCheckResult } from './types';
 import { isNewerVersion } from './version';
 
-export const CURRENT_APP_VERSION = '1.0.0';
+export const CURRENT_APP_VERSION = '1.1.0';
 export const DEFAULT_UPDATE_FEED_URL = 'https://api.github.com/repos/codywon/Lumina-Edit-Pro/releases/latest';
 
 export async function getCurrentExeInfo(): Promise<CurrentExeInfo | null> {
@@ -38,7 +38,7 @@ export async function checkForUpdate(options: {
         return {
           hasUpdate: false,
           currentVersion: CURRENT_APP_VERSION,
-          error: '未找到发布版本记录（若是私有仓库，请在设置中配置 GitHub Token）',
+          error: '未找到发布版本记录，当前可能已是最新版本',
         };
       }
       return {

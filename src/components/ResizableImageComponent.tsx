@@ -3,6 +3,7 @@ import { NodeViewWrapper, NodeViewProps } from '@tiptap/react';
 import { AlignLeft, AlignCenter, AlignRight, Trash2, Image as ImageIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { resolveImageSrc, readLocalImageBase64 } from '../lib/imageResolver';
+import { isTauriRuntime } from '../services/native';
 
 export default function ResizableImageComponent({
   node,
@@ -21,20 +22,56 @@ export default function ResizableImageComponent({
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
-    setDisplaySrc(resolveImageSrc(src));
-    setHasError(false);
-  }, [src]);
+    let isMounted = true;
 
-  useEffect(() => {
-    const handleDocChanged = () => {
-      setDisplaySrc(resolveImageSrc(src));
+    const syncSrc = async () => {
+      setHasError(false);
+
+      if (
+        !src ||
+        src.startsWith('data:') ||
+        src.startsWith('blob:') ||
+        src.startsWith('http://') ||
+        src.startsWith('https://')
+      ) {
+        setDisplaySrc(src || '');
+        return;
+      }
+
+      // In Tauri desktop, immediately read local asset directly via Rust binary reader
+      if (isTauriRuntime()) {
+        try {
+          const base64 = await readLocalImageBase64(src);
+          if (base64 && isMounted) {
+            setDisplaySrc(base64);
+            setHasError(false);
+            return;
+          }
+        } catch {
+          // fall through to convertFileSrc
+        }
+      }
+
+      const resolved = resolveImageSrc(src);
+      if (isMounted) {
+        setDisplaySrc(resolved);
+      }
     };
+
+    void syncSrc();
+
+    const handleDocChanged = () => {
+      void syncSrc();
+    };
+
     window.addEventListener('lumina:document-path-changed', handleDocChanged);
-    return () => window.removeEventListener('lumina:document-path-changed', handleDocChanged);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('lumina:document-path-changed', handleDocChanged);
+    };
   }, [src]);
 
   const handleImageError = async () => {
-    // If not already base64, try fallback via native rust read
     if (!displaySrc.startsWith('data:')) {
       const fallbackDataUrl = await readLocalImageBase64(src);
       if (fallbackDataUrl) {

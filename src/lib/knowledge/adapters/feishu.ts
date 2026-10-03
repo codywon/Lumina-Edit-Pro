@@ -81,8 +81,13 @@ export class FeishuAdapter implements KnowledgeAdapter {
     });
 
     // 6. Convert to Markdown
-    let markdown = convertHtmlToMarkdown(contentEl, { baseUrl: url });
-    markdown = markdown.trim();
+    let bodyMarkdown = convertHtmlToMarkdown(contentEl, { baseUrl: url }).trim();
+    let markdown = '';
+    if (cleanTitle && !bodyMarkdown.startsWith('# ')) {
+      markdown = `# ${cleanTitle}\n\n${bodyMarkdown}`;
+    } else {
+      markdown = bodyMarkdown;
+    }
 
     const metadata: KnowledgeMetadata = {
       title: cleanTitle,

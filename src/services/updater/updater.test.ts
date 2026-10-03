@@ -68,8 +68,8 @@ describe('Updater: Check for Updates Client', () => {
 
   it('recognizes when current version is already up to date', async () => {
     const mockRelease = {
-      tag_name: 'v1.1.3',
-      name: 'Lumina Edit Pro v1.1.3',
+      tag_name: 'v1.1.4',
+      name: 'Lumina Edit Pro v1.1.4',
       body: 'Initial release',
       assets: [],
     };
@@ -83,7 +83,7 @@ describe('Updater: Check for Updates Client', () => {
     const result = await checkForUpdate();
 
     expect(result.hasUpdate).toBe(false);
-    expect(result.latestRelease?.version).toBe('1.1.3');
+    expect(result.latestRelease?.version).toBe('1.1.4');
   });
 
   it('handles 404 or network errors gracefully with informative message', async () => {

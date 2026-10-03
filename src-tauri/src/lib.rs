@@ -900,11 +900,19 @@ async fn network_download_asset(payload: NetworkDownloadPayload) -> Result<Netwo
 
 #[tauri::command]
 fn app_read_asset_data_url(payload: ReadAssetDataUrlPayload) -> Result<String, String> {
-    let p = Path::new(&payload.path);
+    let mut p = PathBuf::from(&payload.path);
+    if !p.exists() {
+        if let Ok(decoded) = percent_encoding::percent_decode_str(&payload.path).decode_utf8() {
+            let p_dec = PathBuf::from(decoded.as_ref());
+            if p_dec.exists() {
+                p = p_dec;
+            }
+        }
+    }
     if !p.exists() {
         return Err(format!("File does not exist: {}", payload.path));
     }
-    let bytes = fs::read(p).map_err(|e| format!("Failed to read asset: {}", e))?;
+    let bytes = fs::read(&p).map_err(|e| format!("Failed to read asset: {}", e))?;
     let ext = p
         .extension()
         .and_then(|s| s.to_str())

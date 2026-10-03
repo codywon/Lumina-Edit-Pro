@@ -1,9 +1,14 @@
 import { isTauriRuntime } from '../services/native';
 import { getNativeInvoke } from '../services/native/invoke';
 
-// Stores active document & workspace directory paths
-let currentWorkspaceRoot: string | null = null;
-let currentDocumentDir: string | null = null;
+const STORAGE_WORKSPACE_KEY = 'lumina-workspace-root';
+const STORAGE_DOC_DIR_KEY = 'lumina-document-dir';
+
+// Initialize from localStorage immediately so there is zero race condition on startup
+let currentWorkspaceRoot: string | null =
+  typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_WORKSPACE_KEY) : null;
+let currentDocumentDir: string | null =
+  typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_DOC_DIR_KEY) : null;
 
 export function setActiveDocumentPathInfo(info: {
   workspaceRoot?: string | null;
@@ -11,6 +16,20 @@ export function setActiveDocumentPathInfo(info: {
 }) {
   currentWorkspaceRoot = info.workspaceRoot ? normalizePath(info.workspaceRoot) : null;
   currentDocumentDir = info.documentDir ? normalizePath(info.documentDir) : null;
+
+  if (typeof localStorage !== 'undefined') {
+    if (currentWorkspaceRoot) {
+      localStorage.setItem(STORAGE_WORKSPACE_KEY, currentWorkspaceRoot);
+    } else {
+      localStorage.removeItem(STORAGE_WORKSPACE_KEY);
+    }
+
+    if (currentDocumentDir) {
+      localStorage.setItem(STORAGE_DOC_DIR_KEY, currentDocumentDir);
+    } else {
+      localStorage.removeItem(STORAGE_DOC_DIR_KEY);
+    }
+  }
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('lumina:document-path-changed'));
@@ -32,35 +51,47 @@ function normalizePath(p: string): string {
  * Determine candidate absolute filesystem paths for a relative image path
  */
 export function getCandidateAbsolutePaths(src: string): string[] {
-  const cleanSrc = src.trim().replace(/\\/g, '/');
+  if (!src) return [];
+  let cleanSrc = src.trim();
+
+  // If already data:, blob:, or remote web URL, no local path needed
   if (
     cleanSrc.startsWith('data:') ||
     cleanSrc.startsWith('blob:') ||
     cleanSrc.startsWith('http://') ||
-    cleanSrc.startsWith('https://') ||
-    cleanSrc.startsWith('asset://')
+    cleanSrc.startsWith('https://')
   ) {
     return [];
   }
 
-  // If already absolute on Windows (e.g. D:/path or D:\path) or Unix (/path)
-  if (/^[a-zA-Z]:[/\\]/.test(cleanSrc) || cleanSrc.startsWith('/')) {
-    return [cleanSrc.replace(/\\/g, '/')];
+  try {
+    cleanSrc = decodeURIComponent(cleanSrc);
+  } catch {}
+
+  cleanSrc = cleanSrc.replace(/\\/g, '/');
+
+  // If already absolute on Windows (e.g. D:/path) or Unix (/path)
+  if (/^[a-zA-Z]:\//.test(cleanSrc) || cleanSrc.startsWith('/')) {
+    return [cleanSrc];
   }
 
   // Relative path: strip leading ./
   const rel = cleanSrc.replace(/^\.\//, '');
-  const candidates: string[] = [];
+  const candidates = new Set<string>();
 
   if (currentDocumentDir) {
-    candidates.push(`${currentDocumentDir}/${rel}`);
+    candidates.add(`${currentDocumentDir}/${rel}`);
   }
 
-  if (currentWorkspaceRoot && currentWorkspaceRoot !== currentDocumentDir) {
-    candidates.push(`${currentWorkspaceRoot}/${rel}`);
+  if (currentWorkspaceRoot) {
+    candidates.add(`${currentWorkspaceRoot}/${rel}`);
+    // Also check workspaceRoot/.assets if rel starts with .assets
+    if (!rel.startsWith('.assets/')) {
+      candidates.add(`${currentWorkspaceRoot}/.assets/${rel}`);
+    }
   }
 
-  return candidates;
+  return Array.from(candidates);
 }
 
 /**
@@ -89,7 +120,6 @@ export function resolveImageSrc(src: string): string {
   const primaryPath = candidates[0];
 
   if (isTauriRuntime() && typeof window !== 'undefined') {
-    // In Tauri, use Tauri's convertFileSrc
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const internals = (window as any).__TAURI_INTERNALS__;
     if (internals && typeof internals.convertFileSrc === 'function') {

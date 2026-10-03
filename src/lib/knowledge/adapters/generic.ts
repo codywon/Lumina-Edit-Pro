@@ -111,8 +111,27 @@ export class GenericWebAdapter implements KnowledgeAdapter {
       }
     });
 
-    let markdown = convertHtmlToMarkdown(contentEl, { baseUrl: url });
-    markdown = markdown.trim();
+    let bodyMarkdown = convertHtmlToMarkdown(contentEl, { baseUrl: url }).trim();
+
+    const metaParts: string[] = [];
+    if (author) metaParts.push(`**作者**：${author}`);
+    if (publishDate) metaParts.push(`**发布时间**：${publishDate}`);
+    if (url) {
+      try {
+        const domain = new URL(url).hostname;
+        metaParts.push(`**来源**：[${domain}](${url})`);
+      } catch {
+        metaParts.push(`**来源**：[原文链接](${url})`);
+      }
+    }
+    const metaHeader = metaParts.length > 0 ? `> ${metaParts.join(' · ')}` : '';
+
+    let markdown = '';
+    if (title && !bodyMarkdown.startsWith('# ')) {
+      markdown = metaHeader ? `# ${title}\n\n${metaHeader}\n\n${bodyMarkdown}` : `# ${title}\n\n${bodyMarkdown}`;
+    } else {
+      markdown = metaHeader ? `${metaHeader}\n\n${bodyMarkdown}` : bodyMarkdown;
+    }
 
     const metadata: KnowledgeMetadata = {
       title,

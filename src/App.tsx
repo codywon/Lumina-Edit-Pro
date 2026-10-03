@@ -1492,7 +1492,13 @@ function AppContent() {
           setWorkspaceDirectoryHandle(nativeWorkspace.directoryHandle);
           setWorkspaceEntries(nativeWorkspace.entries);
           setWorkspaceWritable(nativeWorkspace.writable);
-          setActiveWorkspaceFilePath(null);
+
+          const savedActiveFile = localStorage.getItem('lumina-active-workspace-file');
+          if (savedActiveFile) {
+            setActiveWorkspaceFilePath(savedActiveFile);
+          } else {
+            setActiveWorkspaceFilePath(null);
+          }
           return;
         }
       } catch (error) {
@@ -2086,6 +2092,7 @@ function AppContent() {
       activeWorkspaceFilePathRef.current = entry.path;
       setActiveFileHandle(targetHandle);
       setActiveWorkspaceFilePath(entry.path);
+      localStorage.setItem('lumina-active-workspace-file', entry.path);
       syncDocumentContent(fileContent);
       workspaceContentCacheRef.current.set(entry.path, fileContent);
       storeRecentFile(entry.name, targetHandle);

@@ -28,10 +28,11 @@ interface KnowledgeSourceModalProps {
   onClose: () => void;
   showToast: (msg: string, level?: 'info' | 'warning' | 'error') => void;
   onInsertAtCursor: (markdown: string) => void;
-  onCreateWorkspaceDocument?: (fileName: string, content: string) => Promise<boolean>;
+  onCreateWorkspaceDocument?: (fileName: string, content: string, subDirectory?: string) => Promise<boolean>;
   workspaceId?: string;
   documentFilePath?: string;
   hasActiveWorkspace?: boolean;
+  workspaceName?: string;
 }
 
 export default function KnowledgeSourceModal({
@@ -43,10 +44,12 @@ export default function KnowledgeSourceModal({
   workspaceId,
   documentFilePath,
   hasActiveWorkspace = false,
+  workspaceName,
 }: KnowledgeSourceModalProps) {
   const [inputMode, setInputMode] = useState<'url' | 'html'>('url');
   const [url, setUrl] = useState('');
   const [htmlContent, setHtmlContent] = useState('');
+  const [subDirectory, setSubDirectory] = useState('');
   const [detectedPlatform, setDetectedPlatform] = useState<KnowledgePlatform>('generic');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -220,7 +223,7 @@ export default function KnowledgeSourceModal({
 
       if (saveMode === 'new-file' && onCreateWorkspaceDocument) {
         setProgressText('正在写入新文档...');
-        const success = await onCreateWorkspaceDocument(prepared.suggestedFileName, prepared.fullMarkdown);
+        const success = await onCreateWorkspaceDocument(prepared.suggestedFileName, prepared.fullMarkdown, subDirectory);
         if (success) {
           const assetMsg = prepared.localizationResult?.localizedCount
             ? `，已本地化 ${prepared.localizationResult.localizedCount} 张图片`
@@ -530,6 +533,23 @@ export default function KnowledgeSourceModal({
                     <span>插入到当前文档</span>
                   </label>
                 </div>
+
+                {saveMode === 'new-file' && (
+                  <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400 bg-neutral-100/70 dark:bg-neutral-900/60 px-3 py-1.5 rounded-lg border border-neutral-200/60 dark:border-neutral-800">
+                    <span className="truncate mr-2">
+                      保存至：{workspaceName ? `${workspaceName}${subDirectory ? ` / ${subDirectory}` : ' (根目录)'}` : '未打开工作区（将在编辑器直接载入）'}
+                    </span>
+                    {hasActiveWorkspace && (
+                      <input
+                        type="text"
+                        value={subDirectory}
+                        onChange={(e) => setSubDirectory(e.target.value.replace(/[\\:*?"<>|]/g, ''))}
+                        placeholder="保存子目录 (可选)"
+                        className="text-[11px] px-2 py-0.5 rounded bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 focus:outline-none focus:border-orange-500 w-36 text-right placeholder:text-neutral-400 shrink-0"
+                      />
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-center gap-4 text-xs text-neutral-600 dark:text-neutral-300 pt-0.5">
                   <label className="flex items-center gap-1.5 cursor-pointer">

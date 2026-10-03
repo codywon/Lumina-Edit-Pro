@@ -23,6 +23,7 @@ interface HeaderProps {
   content: string;
   showToast: (message: string, level?: 'info' | 'warning' | 'error') => void;
   onSave: () => void;
+  onSaveAs?: () => void;
   onNewFile: () => void;
   onOpenFile: () => void;
   onSearch: (query: string) => void;
@@ -63,6 +64,7 @@ function HeaderComponent({
   content,
   showToast,
   onSave,
+  onSaveAs,
   onNewFile,
   onOpenFile,
   onSearch,
@@ -355,6 +357,7 @@ function HeaderComponent({
         { label: '新建文件', shortcut: settings.shortcuts.newFile, action: onNewFile },
         { label: '打开文件', shortcut: settings.shortcuts.openFile, action: onOpenFile },
         { label: '保存', shortcut: settings.shortcuts.saveFile, action: onSave },
+        { label: '另存为...', shortcut: settings.shortcuts.saveAs || 'Ctrl+Shift+S', action: () => onSaveAs?.() },
         { label: '时光机...', action: () => onOpenTimeline?.() },
         { label: '打印', shortcut: '', action: () => window.print() },
         { label: '导出为PDF', action: () => handleExport('pdf') },

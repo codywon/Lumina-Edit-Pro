@@ -2,6 +2,7 @@ export type ShortcutAction =
   | 'newFile'
   | 'openFile'
   | 'saveFile'
+  | 'saveAs'
   | 'openPreferences'
   | 'toggleSidebar'
   | 'toggleSourceMode'
@@ -48,6 +49,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { id: 'newFile', label: '新建文件', defaultShortcut: 'Ctrl+N' },
       { id: 'openFile', label: '打开文件', defaultShortcut: 'Ctrl+O' },
       { id: 'saveFile', label: '保存', defaultShortcut: 'Ctrl+S' },
+      { id: 'saveAs', label: '另存为', defaultShortcut: 'Ctrl+Shift+S' },
       { id: 'openPreferences', label: '偏好设置', defaultShortcut: 'Ctrl+,' },
     ],
   },

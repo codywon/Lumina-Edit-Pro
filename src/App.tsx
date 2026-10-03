@@ -41,6 +41,7 @@ import { AIProvider } from './contexts/AIContext';
 import { checkForUpdate, type ReleaseInfo } from './services/updater';
 import { setActiveDocumentPathInfo } from './lib/imageResolver';
 import { parseFrontmatter } from './lib/frontmatter';
+import { extractDocumentBaseName, saveExportedBytes } from './lib/exportSave';
 
 // Lazy-loaded modal components (deferred until explicitly opened)
 const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
@@ -1944,6 +1945,38 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, [workspaceEntries, workspaceSearchQuery, workspaceSearchOptions.caseSensitive, workspaceSearchOptions.wholeWord]);
 
+  const handleSaveAs = async () => {
+    if (pendingUpdateTimerRef.current !== null) {
+      clearTimeout(pendingUpdateTimerRef.current);
+      pendingUpdateTimerRef.current = null;
+    }
+    if (editor && editor.isFocused) {
+      const freshMd = (editor.storage as any).markdown?.getMarkdown?.();
+      if (typeof freshMd === 'string') {
+        contentRef.current = freshMd;
+        setContent(freshMd);
+      }
+    }
+    const currentContent = contentRef.current;
+    const defaultName = activeDocumentName || extractDocumentBaseName(currentContent, 'Lumina-Document');
+    const bytes = new TextEncoder().encode(currentContent);
+
+    const success = await saveExportedBytes({
+      bytes,
+      defaultFileName: defaultName.endsWith('.md') ? defaultName : `${defaultName}.md`,
+      filterName: 'Markdown 文档 (*.md)',
+      extensions: ['md', 'markdown', 'txt'],
+      mimeType: 'text/markdown',
+      showToast,
+      successLabel: 'Markdown 文档',
+    });
+
+    if (success) {
+      lastSavedContentRef.current = currentContent;
+    }
+    return success;
+  };
+
   const handleSaveFile = async () => {
     if (pendingUpdateTimerRef.current !== null) {
       clearTimeout(pendingUpdateTimerRef.current);
@@ -1997,6 +2030,7 @@ function AppContent() {
       };
 
       if (matchShortcut(event, shortcuts.saveFile)) return run(handleSaveFile);
+      if (matchShortcut(event, (shortcuts as any).saveAs || 'Ctrl+Shift+S')) return run(() => void handleSaveAs());
       if ((event.ctrlKey || event.metaKey) && (event.key === 'p' || event.key === 'P') && !event.shiftKey && !event.altKey) {
         return run(() => setIsQuickOpenVisible(true));
       }
@@ -2287,9 +2321,14 @@ function AppContent() {
     return await createWorkspaceFileAt(typeof directoryPath === 'string' ? directoryPath : null, fileNameInput);
   };
 
-  const handleCreateClippedWorkspaceFile = async (fileName: string, fileContent: string): Promise<boolean> => {
+  const handleCreateClippedWorkspaceFile = async (
+    fileName: string,
+    fileContent: string,
+    subDirectory?: string
+  ): Promise<boolean> => {
     if (workspaceDirectoryHandle && workspaceWritable) {
-      return await createWorkspaceFileAt(null, fileName, fileContent);
+      const dirPath = subDirectory?.trim() ? subDirectory.trim().replace(/^[/\\]+|[/\\]+$/g, '') : null;
+      return await createWorkspaceFileAt(dirPath, fileName, fileContent);
     }
     syncDocumentContent(fileContent);
     setActiveFileHandle(null);
@@ -2823,6 +2862,7 @@ function AppContent() {
           content={content}
           showToast={showToast}
           onSave={handleSaveFile}
+          onSaveAs={handleSaveAs}
           onNewFile={handleNewFile}
           onOpenFile={handleOpenFile}
           onSearch={handleSearch}
@@ -3079,6 +3119,7 @@ function AppContent() {
             }
             documentFilePath={activeFileHandle?.path}
             hasActiveWorkspace={Boolean(workspaceName && workspaceWritable)}
+            workspaceName={workspaceName || undefined}
           />
         )}
         {isExportDocxModalOpen && (

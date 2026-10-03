@@ -553,7 +553,7 @@ describe('App workspace shell usability', () => {
       expect(intervalHandlers.length).toBeGreaterThan(0);
 
       await act(async () => {
-        intervalHandlers[intervalHandlers.length - 1]();
+        intervalHandlers.forEach((handler) => handler());
         await Promise.resolve();
       });
 

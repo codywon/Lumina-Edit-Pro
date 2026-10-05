@@ -241,6 +241,39 @@ body,
     margin-bottom: 0 !important;
   }
 
+  /* 选项 2：精制 Marker 符号微排版 + 悬停主题色点亮 */
+  .prose-custom ul:not([data-type="taskList"]) > li::marker,
+  .tiptap ul:not([data-type="taskList"]) > li::marker {
+    color: #94a3b8 !important;
+    font-size: 0.86em;
+  }
+  .dark .prose-custom ul:not([data-type="taskList"]) > li::marker,
+  .dark .tiptap ul:not([data-type="taskList"]) > li::marker {
+    color: #64748b !important;
+  }
+
+  /* 悬停时 Marker 灵动点亮为当前主题 Accent 色，为长技术规范提供无感视线锚点 */
+  .prose-custom ul:not([data-type="taskList"]) > li:hover::marker,
+  .tiptap ul:not([data-type="taskList"]) > li:hover::marker {
+    color: var(--accent, #ec5b13) !important;
+  }
+
+  /* 有序列表数字标记：等宽半粗中性字色，秩序感出众 */
+  .prose-custom ol > li::marker,
+  .tiptap ol > li::marker {
+    color: #64748b !important;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .dark .prose-custom ol > li::marker,
+  .dark .tiptap ol > li::marker {
+    color: #94a3b8 !important;
+  }
+  .prose-custom ol > li:hover::marker,
+  .tiptap ol > li:hover::marker {
+    color: var(--accent, #ec5b13) !important;
+  }
+
   /* 消除 li 内部可能生成的 p 标签带来的多余二次间距叠加 */
   .prose-custom li > p,
   .tiptap li > p {

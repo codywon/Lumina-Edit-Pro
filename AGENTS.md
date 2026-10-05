@@ -143,9 +143,9 @@
 
 ---
 
-# Lumina Edit Pro 现代列表排版与层次设计规范 (List Design Specification)
+# Lumina Edit Pro 现代列表微卡片块排版规范 (Notion Card-Block List Specification)
 
-> **核心原则**：汲取 Notion 与 Linear 的微型块（Block）排版精髓，彻底解决传统 Markdown 列表在面对架构规范、长篇长句罗列时“密密麻麻、项距坍塌、视线串行”的阅读窒息感。
+> **核心原则**：汲取 Notion 的微型卡片块（Card Block）排版精髓，将散乱游离的列表项封装为独立微卡片，彻底解决传统 Markdown 列表在面对架构规范、长篇长句罗列时“密密麻麻、项距坍塌、视线串行”的阅读窒息感。
 
 ---
 
@@ -159,133 +159,74 @@
 
 ---
 
-## 2. 黄金排版四法则 (The 4 List Pillars)
+## 2. 黄金排版四法则 (The 4 Card-Block Pillars)
 
-### 法则一：块级纵向呼吸韵律（Vertical Rhythm & Item Margin）
+### 法则一：Notion 独立微卡片块（Card-Block Structure）
 
-- 条目间距拉开至 `0.85em`（约 14px~16px），内部行距收敛至 `1.62`，确保 **条目间距（Item Gap）明显大于条内行距（Line Gap）**，彻底打破 CSS 外边距折叠陷阱。
-- 无论单条文字只有 1 行还是长达 5 行，大脑扫一眼就能精确识别出共有多少个独立观点。
-- 自动消除 `li` 内部 `<p>` 标签二次产生的多余边距，杜绝高度失控。
+- 每个列表条目拥有专属的浅色边框、温润底色、独立圆角（8px）与微阴影，将一条条长句封装为高质感的“知识微卡片”；
+- 彻底消除单行过长或多行文本之间的模糊边界。
 
 ```css
 .prose-custom ul:not([data-type="taskList"]) > li,
 .tiptap ul:not([data-type="taskList"]) > li,
 .prose-custom ol > li,
 .tiptap ol > li {
-  position: relative;
-  line-height: 1.62 !important;
-  margin-top: 0.15em !important;
-  margin-bottom: 0.85em !important;
-  padding: 0.2rem 0.5rem 0.2rem 0.35rem !important;
-  margin-left: -0.35rem !important;
-  border-radius: 6px;
-  transition: background-color 0.15s ease;
-}
-
-.prose-custom li > p,
-.tiptap li > p {
+  position: relative !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background-color: rgba(0, 0, 0, 0.015) !important;
+  border-radius: 8px !important;
+  padding: 11px 16px 11px 34px !important;
   margin-top: 0 !important;
-  margin-bottom: 0 !important;
-  line-height: inherit !important;
+  margin-bottom: 10px !important;
+  line-height: 1.68 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+  box-sizing: border-box !important;
+}
+
+.dark .prose-custom ul:not([data-type="taskList"]) > li,
+.dark .tiptap ul:not([data-type="taskList"]) > li {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.025) !important;
 }
 ```
 
-### 法则二：Notion 标志性三级几何 Marker 系统（Hierarchical Markers）
+### 法则二：精制几何指示器（Refined Card Markers）
 
-- **一级列表（Level 1）**：温润高级中性灰实心圆点（`#94a3b8` / `#64748b`），克制不抢戏；
-- **二级列表（Level 2）**：精致空心圆环（`circle`）；
-- **三级列表（Level 3）**：微型小方块（`square`）；
-- **有序列表（OL）**：采用等宽半粗中性字色（`tabular-nums`），秩序感出众。
+- **无序列表**：左侧对齐 7px 精致 Accent 主题色微球与微弱半透明光环，起笔稳重；
+- **有序列表**：采用等宽半粗主题色数字计数器（`tabular-nums`），整齐对齐。
 
 ```css
-/* 一级列表：实心圆点 */
-.prose-custom ul:not([data-type="taskList"]) > li::marker,
-.tiptap ul:not([data-type="taskList"]) > li::marker {
-  color: #94a3b8 !important;
-  font-size: 0.84em;
-  transition: color 0.15s ease;
-}
-.dark .prose-custom ul:not([data-type="taskList"]) > li::marker,
-.dark .tiptap ul:not([data-type="taskList"]) > li::marker {
-  color: #64748b !important;
-}
-
-/* 二级与三级几何标记 */
-.prose-custom ul:not([data-type="taskList"]) ul,
-.tiptap ul:not([data-type="taskList"]) ul {
-  list-style-type: circle !important;
-}
-.prose-custom ul:not([data-type="taskList"]) ul ul,
-.tiptap ul:not([data-type="taskList"]) ul ul {
-  list-style-type: square !important;
+.prose-custom ul:not([data-type="taskList"]) > li::before,
+.tiptap ul:not([data-type="taskList"]) > li::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 14px !important;
+  top: 19px !important;
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  background-color: var(--accent, #ec5b13) !important;
+  box-shadow: 0 0 0 2.5px rgba(var(--accent-rgb, 236, 91, 19), 0.16) !important;
 }
 ```
 
-### 法则三：嵌套树状导轨与悬挂缩进（Tree Indent Guides）
+### 法则三：卡片悬停微光浮动与视线锁定（Card Hover Focus）
 
-- 列表项多行折行时严格左对齐首行文本起点，保留一条平直、清爽的阅读纵轴。
-- 嵌套列表在左侧绘制极淡、半透明的树状导轨（`1.5px solid rgba(148, 163, 184, 0.22)`），一眼看清归属层级，彻底消除散落漂浮感。
-
-```css
-.prose-custom ul ul,
-.prose-custom ol ol,
-.prose-custom ul ol,
-.prose-custom ol ul,
-.tiptap ul ul,
-.tiptap ol ol,
-.tiptap ul ol,
-.tiptap ol ul {
-  position: relative;
-  margin-top: 0.25em !important;
-  margin-bottom: 0.35em !important;
-  padding-left: 1.25em !important;
-  border-left: 1.5px solid rgba(148, 163, 184, 0.22);
-  margin-left: 0.25em;
-}
-.dark .prose-custom ul ul,
-.dark .prose-custom ol ol,
-.dark .tiptap ul ul,
-.dark .tiptap ol ol {
-  border-left-color: rgba(100, 116, 139, 0.28);
-}
-```
-
-### 法则四：视线锁定微光与扫描锚点（Hover Focus & Lead-in Anchor）
-
-- **悬停微光**：鼠标掠过列表项时赋予 `rgba(accent, 0.035)` 微弱底色，Marker 灵动过渡为主题色，阅读长段时余光始终能锁定上下文边界；
-- **扫描锚点**：对列表首个粗体词或短语（`**关键词:**`）赋予略深字重与对比度，便于用户进行 F 型快速扫读。
+- 鼠标划过某张卡片时，整张卡片边框亮起为 Accent 主题色，呈现极淡微光浮动，帮助读者的余光死死锁定当前条目的边界，绝不串行。
 
 ```css
-/* 悬停微光 */
 .prose-custom ul:not([data-type="taskList"]) > li:hover,
-.tiptap ul:not([data-type="taskList"]) > li:hover,
-.prose-custom ol > li:hover,
-.tiptap ol > li:hover {
-  background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.035);
-}
-.dark .prose-custom ul:not([data-type="taskList"]) > li:hover,
-.dark .tiptap ul:not([data-type="taskList"]) > li:hover {
-  background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.075);
-}
-.prose-custom ul:not([data-type="taskList"]) > li:hover::marker,
-.tiptap ul:not([data-type="taskList"]) > li:hover::marker {
-  color: var(--accent) !important;
-}
-
-/* 扫描锚点 */
-.prose-custom li > strong:first-child,
-.tiptap li > strong:first-child,
-.prose-custom li > p > strong:first-child,
-.tiptap li > p > strong:first-child {
-  color: #0f172a;
-  font-weight: 600;
-  margin-right: 0.2em;
-}
-.dark .prose-custom li > strong:first-child,
-.dark .tiptap li > strong:first-child {
-  color: #f8fafc;
+.tiptap ul:not([data-type="taskList"]) > li:hover {
+  border-color: rgba(var(--accent-rgb, 236, 91, 19), 0.38) !important;
+  background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.035) !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04) !important;
 }
 ```
+
+### 法则四：嵌套轻量化与首词粗体锚点（Nested Sub-items & Lead-in Anchor）
+
+- 卡片内部如果出现嵌套子列表，子条目自动转为轻量化树状导轨，不再堆叠冗余的大卡片边框；
+- 对列表首个粗体词或短语（`**关键词:**`）赋予略深字重与对比度，便于用户进行 F 型快速扫读。
 
 ---
 

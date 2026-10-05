@@ -221,9 +221,143 @@ body,
     margin-bottom: var(--editor-paragraph-spacing, 0.5em) !important;
   }
 
-  .prose-custom li {
-    margin-top: calc(var(--editor-paragraph-spacing, 0.5em) * 0.35) !important;
-    margin-bottom: calc(var(--editor-paragraph-spacing, 0.5em) * 0.35) !important;
+  /* Notion-Grade List Typography (现代列表呼吸感排版规范) */
+  .prose-custom ul:not([data-type="taskList"]),
+  .tiptap ul:not([data-type="taskList"]),
+  .prose-custom ol,
+  .tiptap ol {
+    padding-left: 1.6rem !important;
+    margin-top: 0.8em !important;
+    margin-bottom: 1em !important;
+  }
+
+  .prose-custom ul:not([data-type="taskList"]) > li,
+  .tiptap ul:not([data-type="taskList"]) > li,
+  .prose-custom ol > li,
+  .tiptap ol > li {
+    position: relative;
+    line-height: 1.62 !important; /* 适度收敛单项内折行间距，形成紧凑的独立块语义 */
+    margin-top: 0.15em !important;
+    margin-bottom: 0.85em !important; /* 彻底打破外边距折叠陷阱：项与项之间留足呼吸间距，杜绝文字砖 */
+    padding: 0.2rem 0.5rem 0.2rem 0.35rem !important;
+    margin-left: -0.35rem !important;
+    border-radius: 6px;
+    transition: background-color 0.15s ease;
+  }
+
+  .prose-custom ul:not([data-type="taskList"]) > li:last-child,
+  .tiptap ul:not([data-type="taskList"]) > li:last-child,
+  .prose-custom ol > li:last-child,
+  .tiptap ol > li:last-child {
+    margin-bottom: 0.15em !important;
+  }
+
+  /* 消除 li 内部可能生成的 p 标签带来的额外纵向间距膨胀，保证行高与条目受控 */
+  .prose-custom li > p,
+  .tiptap li > p {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    line-height: inherit !important;
+  }
+
+  /* 列表项悬停微光聚焦（长句阅读时辅助视线锁定，防止串行） */
+  .prose-custom ul:not([data-type="taskList"]) > li:hover,
+  .tiptap ul:not([data-type="taskList"]) > li:hover,
+  .prose-custom ol > li:hover,
+  .tiptap ol > li:hover {
+    background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.035);
+  }
+  .dark .prose-custom ul:not([data-type="taskList"]) > li:hover,
+  .dark .tiptap ul:not([data-type="taskList"]) > li:hover,
+  .dark .prose-custom ol > li:hover,
+  .dark .tiptap ol > li:hover {
+    background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.075);
+  }
+
+  /* Notion 标志性三级 Marker 符号体系 */
+  /* 一级列表：精致实心圆点 */
+  .prose-custom ul:not([data-type="taskList"]) > li::marker,
+  .tiptap ul:not([data-type="taskList"]) > li::marker {
+    color: #94a3b8 !important;
+    font-size: 0.84em;
+    transition: color 0.15s ease;
+  }
+  .dark .prose-custom ul:not([data-type="taskList"]) > li::marker,
+  .dark .tiptap ul:not([data-type="taskList"]) > li::marker {
+    color: #64748b !important;
+  }
+
+  /* 悬停时 Marker 灵动过渡为主题色 */
+  .prose-custom ul:not([data-type="taskList"]) > li:hover::marker,
+  .tiptap ul:not([data-type="taskList"]) > li:hover::marker {
+    color: var(--accent) !important;
+  }
+
+  /* 二级列表：空心圆 (Circle) */
+  .prose-custom ul:not([data-type="taskList"]) ul,
+  .tiptap ul:not([data-type="taskList"]) ul {
+    list-style-type: circle !important;
+  }
+
+  /* 三级列表：微型小方块 (Square) */
+  .prose-custom ul:not([data-type="taskList"]) ul ul,
+  .tiptap ul:not([data-type="taskList"]) ul ul {
+    list-style-type: square !important;
+  }
+
+  /* 有序列表数字标记：等宽半粗中性字色，秩序感出众 */
+  .prose-custom ol > li::marker,
+  .tiptap ol > li::marker {
+    color: #64748b !important;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .dark .prose-custom ol > li::marker,
+  .dark .tiptap ol > li::marker {
+    color: #94a3b8 !important;
+  }
+
+  /* 嵌套列表树状导轨 (Notion Tree Guide Lines) */
+  .prose-custom ul ul,
+  .prose-custom ol ol,
+  .prose-custom ul ol,
+  .prose-custom ol ul,
+  .tiptap ul ul,
+  .tiptap ol ol,
+  .tiptap ul ol,
+  .tiptap ol ul {
+    position: relative;
+    margin-top: 0.25em !important;
+    margin-bottom: 0.35em !important;
+    padding-left: 1.25em !important;
+    border-left: 1.5px solid rgba(148, 163, 184, 0.22);
+    margin-left: 0.25em;
+  }
+  .dark .prose-custom ul ul,
+  .dark .prose-custom ol ol,
+  .dark .prose-custom ul ol,
+  .dark .prose-custom ol ul,
+  .dark .tiptap ul ul,
+  .dark .tiptap ol ol,
+  .dark .tiptap ul ol,
+  .dark .tiptap ol ul {
+    border-left-color: rgba(100, 116, 139, 0.28);
+  }
+
+  /* 强化列表首个粗体词作为扫描视觉锚点 (Scannability Lead-in Anchor) */
+  .prose-custom li > strong:first-child,
+  .tiptap li > strong:first-child,
+  .prose-custom li > p > strong:first-child,
+  .tiptap li > p > strong:first-child {
+    color: #0f172a;
+    font-weight: 600;
+    margin-right: 0.2em;
+  }
+  .dark .prose-custom li > strong:first-child,
+  .dark .tiptap li > strong:first-child,
+  .dark .prose-custom li > p > strong:first-child,
+  .dark .tiptap li > p > strong:first-child {
+    color: #f8fafc;
   }
 
   .prose-custom :not(pre) > code {

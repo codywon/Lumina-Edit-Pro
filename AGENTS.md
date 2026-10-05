@@ -140,3 +140,161 @@
 ---
 
 *本文档为 Lumina Edit Pro 永久排版设计规范，后续所有表格组件、节点扩展与样式更新均需严格遵守此标准。*
+
+---
+
+# Lumina Edit Pro 现代列表排版与层次设计规范 (List Design Specification)
+
+> **核心原则**：汲取 Notion 与 Linear 的微型块（Block）排版精髓，彻底解决传统 Markdown 列表在面对架构规范、长篇长句罗列时“密密麻麻、项距坍塌、视线串行”的阅读窒息感。
+
+---
+
+## 1. 核心技术痛点回顾
+
+在 Markdown 富文本编辑中，列表排版普遍存在三大天然痛点：
+
+1. **格式塔邻近原则破坏（Item Gap Collapse）**：传统 CSS 赋予 `li` 的垂直外间距常常只有 2~3px，而列表项内部折行的行间距却有 10~12px。条目间距比条内折行间距还要窄，读者的视知觉无法将每条识别为独立观点，直接糊成“文字砖块”；
+2. **符号定位感微弱（Marker Drift）**：原生浏览器的 `list-style: disc` 在中文长段和行内代码混排时极易发虚且垂直基线漂移，在大量代码药丸和长句面前起不到视觉抓力；
+3. **扫描锚点缺失（Lack of Scannability）**：长列表缺少主题词对比和悬停视觉锁定，用户无法进行 F 型快速扫读，长时间精读极易发生“串行疲劳”。
+
+---
+
+## 2. 黄金排版四法则 (The 4 List Pillars)
+
+### 法则一：块级纵向呼吸韵律（Vertical Rhythm & Item Margin）
+
+- 条目间距拉开至 `0.85em`（约 14px~16px），内部行距收敛至 `1.62`，确保 **条目间距（Item Gap）明显大于条内行距（Line Gap）**，彻底打破 CSS 外边距折叠陷阱。
+- 无论单条文字只有 1 行还是长达 5 行，大脑扫一眼就能精确识别出共有多少个独立观点。
+- 自动消除 `li` 内部 `<p>` 标签二次产生的多余边距，杜绝高度失控。
+
+```css
+.prose-custom ul:not([data-type="taskList"]) > li,
+.tiptap ul:not([data-type="taskList"]) > li,
+.prose-custom ol > li,
+.tiptap ol > li {
+  position: relative;
+  line-height: 1.62 !important;
+  margin-top: 0.15em !important;
+  margin-bottom: 0.85em !important;
+  padding: 0.2rem 0.5rem 0.2rem 0.35rem !important;
+  margin-left: -0.35rem !important;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.prose-custom li > p,
+.tiptap li > p {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  line-height: inherit !important;
+}
+```
+
+### 法则二：Notion 标志性三级几何 Marker 系统（Hierarchical Markers）
+
+- **一级列表（Level 1）**：温润高级中性灰实心圆点（`#94a3b8` / `#64748b`），克制不抢戏；
+- **二级列表（Level 2）**：精致空心圆环（`circle`）；
+- **三级列表（Level 3）**：微型小方块（`square`）；
+- **有序列表（OL）**：采用等宽半粗中性字色（`tabular-nums`），秩序感出众。
+
+```css
+/* 一级列表：实心圆点 */
+.prose-custom ul:not([data-type="taskList"]) > li::marker,
+.tiptap ul:not([data-type="taskList"]) > li::marker {
+  color: #94a3b8 !important;
+  font-size: 0.84em;
+  transition: color 0.15s ease;
+}
+.dark .prose-custom ul:not([data-type="taskList"]) > li::marker,
+.dark .tiptap ul:not([data-type="taskList"]) > li::marker {
+  color: #64748b !important;
+}
+
+/* 二级与三级几何标记 */
+.prose-custom ul:not([data-type="taskList"]) ul,
+.tiptap ul:not([data-type="taskList"]) ul {
+  list-style-type: circle !important;
+}
+.prose-custom ul:not([data-type="taskList"]) ul ul,
+.tiptap ul:not([data-type="taskList"]) ul ul {
+  list-style-type: square !important;
+}
+```
+
+### 法则三：嵌套树状导轨与悬挂缩进（Tree Indent Guides）
+
+- 列表项多行折行时严格左对齐首行文本起点，保留一条平直、清爽的阅读纵轴。
+- 嵌套列表在左侧绘制极淡、半透明的树状导轨（`1.5px solid rgba(148, 163, 184, 0.22)`），一眼看清归属层级，彻底消除散落漂浮感。
+
+```css
+.prose-custom ul ul,
+.prose-custom ol ol,
+.prose-custom ul ol,
+.prose-custom ol ul,
+.tiptap ul ul,
+.tiptap ol ol,
+.tiptap ul ol,
+.tiptap ol ul {
+  position: relative;
+  margin-top: 0.25em !important;
+  margin-bottom: 0.35em !important;
+  padding-left: 1.25em !important;
+  border-left: 1.5px solid rgba(148, 163, 184, 0.22);
+  margin-left: 0.25em;
+}
+.dark .prose-custom ul ul,
+.dark .prose-custom ol ol,
+.dark .tiptap ul ul,
+.dark .tiptap ol ol {
+  border-left-color: rgba(100, 116, 139, 0.28);
+}
+```
+
+### 法则四：视线锁定微光与扫描锚点（Hover Focus & Lead-in Anchor）
+
+- **悬停微光**：鼠标掠过列表项时赋予 `rgba(accent, 0.035)` 微弱底色，Marker 灵动过渡为主题色，阅读长段时余光始终能锁定上下文边界；
+- **扫描锚点**：对列表首个粗体词或短语（`**关键词:**`）赋予略深字重与对比度，便于用户进行 F 型快速扫读。
+
+```css
+/* 悬停微光 */
+.prose-custom ul:not([data-type="taskList"]) > li:hover,
+.tiptap ul:not([data-type="taskList"]) > li:hover,
+.prose-custom ol > li:hover,
+.tiptap ol > li:hover {
+  background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.035);
+}
+.dark .prose-custom ul:not([data-type="taskList"]) > li:hover,
+.dark .tiptap ul:not([data-type="taskList"]) > li:hover {
+  background-color: rgba(var(--accent-rgb, 236, 91, 19), 0.075);
+}
+.prose-custom ul:not([data-type="taskList"]) > li:hover::marker,
+.tiptap ul:not([data-type="taskList"]) > li:hover::marker {
+  color: var(--accent) !important;
+}
+
+/* 扫描锚点 */
+.prose-custom li > strong:first-child,
+.tiptap li > strong:first-child,
+.prose-custom li > p > strong:first-child,
+.tiptap li > p > strong:first-child {
+  color: #0f172a;
+  font-weight: 600;
+  margin-right: 0.2em;
+}
+.dark .prose-custom li > strong:first-child,
+.dark .tiptap li > strong:first-child {
+  color: #f8fafc;
+}
+```
+
+---
+
+## 3. 边界与纯粹性保证
+
+- **仅作用于列表**：上述规则使用精准选择器严格约束在 `ul / ol / li` 之内；
+- **绝不污染其他元素**：普通段落 `p`、表格 `table`、代码块 `pre/code`、数学公式 `math`、引用块 `blockquote` 以及任务清单 `ul[data-type="taskList"]` 均拥有各自独立的作用域与排版逻辑，彼此完全解耦；
+- **Markdown 原文 0 污染**：底层存储与导出保持标准 Markdown 语法，无任何附加属性侵入。
+
+---
+
+*本文档为 Lumina Edit Pro 永久排版设计规范，后续所有列表与层次结构样式更新均需严格遵守此标准。*

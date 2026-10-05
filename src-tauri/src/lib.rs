@@ -784,11 +784,10 @@ fn app_apply_update_and_restart() -> Result<(), String> {
         return Err(format!("置换新版本失败，已安全恢复旧版本：{}", e));
     }
 
-    // Step 3: 拉起全新的可执行文件
+    // Step 3: 拉起全新的可执行文件（Windows GUI 应用严禁加 CREATE_NO_WINDOW，否则会导致无窗僵尸进程锁死 WebView2）
     #[cfg(target_os = "windows")]
     {
         let mut cmd = std::process::Command::new(&current_exe);
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW for launcher
         if let Err(e) = cmd.spawn() {
             return Err(format!("新版本已成功替换，但自动拉起新进程失败，请手动双击启动：{}", e));
         }

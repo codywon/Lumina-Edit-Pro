@@ -124,11 +124,15 @@ body,
 
   /* Hardware-accelerated virtual layout for ultra-long documents (100k+ words) */
   .prose-custom > p,
+  .prose-custom > ul,
+  .prose-custom > ol,
   .prose-custom > blockquote,
   .prose-custom > .tableWrapper,
   .prose-custom > .code-block,
   .prose-custom > .math-block-wrapper,
   .tiptap > p,
+  .tiptap > ul,
+  .tiptap > ol,
   .tiptap > blockquote,
   .tiptap > .tableWrapper,
   .tiptap > .code-block,
@@ -242,7 +246,6 @@ body,
     padding: 0.2rem 0.5rem 0.2rem 0.35rem !important;
     margin-left: -0.35rem !important;
     border-radius: 6px;
-    transition: background-color 0.15s ease;
   }
 
   .prose-custom ul:not([data-type="taskList"]) > li:last-child,
@@ -280,17 +283,10 @@ body,
   .tiptap ul:not([data-type="taskList"]) > li::marker {
     color: #94a3b8 !important;
     font-size: 0.84em;
-    transition: color 0.15s ease;
   }
   .dark .prose-custom ul:not([data-type="taskList"]) > li::marker,
   .dark .tiptap ul:not([data-type="taskList"]) > li::marker {
     color: #64748b !important;
-  }
-
-  /* 悬停时 Marker 灵动过渡为主题色 */
-  .prose-custom ul:not([data-type="taskList"]) > li:hover::marker,
-  .tiptap ul:not([data-type="taskList"]) > li:hover::marker {
-    color: var(--accent) !important;
   }
 
   /* 二级列表：空心圆 (Circle) */

@@ -225,9 +225,20 @@ body,
     margin-bottom: var(--editor-paragraph-spacing, 0.5em) !important;
   }
 
-  .prose-custom li {
-    margin-top: var(--editor-paragraph-spacing, 0.5em) !important;
-    margin-bottom: var(--editor-paragraph-spacing, 0.5em) !important;
+  /* 列表项真实空行间距：彻底拉开一整行留白，条目间不再挤压粘连 */
+  .prose-custom ul:not([data-type="taskList"]) > li,
+  .tiptap ul:not([data-type="taskList"]) > li,
+  .prose-custom ol > li,
+  .tiptap ol > li {
+    margin-top: 0 !important;
+    margin-bottom: calc(var(--editor-paragraph-spacing, 0.5em) + 0.85em) !important;
+  }
+
+  .prose-custom ul:not([data-type="taskList"]) > li:last-child,
+  .tiptap ul:not([data-type="taskList"]) > li:last-child,
+  .prose-custom ol > li:last-child,
+  .tiptap ol > li:last-child {
+    margin-bottom: 0 !important;
   }
 
   /* 消除 li 内部可能生成的 p 标签带来的多余二次间距叠加 */

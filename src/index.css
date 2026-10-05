@@ -226,8 +226,15 @@ body,
   }
 
   .prose-custom li {
-    margin-top: calc(var(--editor-paragraph-spacing, 0.5em) * 0.35) !important;
-    margin-bottom: calc(var(--editor-paragraph-spacing, 0.5em) * 0.35) !important;
+    margin-top: var(--editor-paragraph-spacing, 0.5em) !important;
+    margin-bottom: var(--editor-paragraph-spacing, 0.5em) !important;
+  }
+
+  /* 消除 li 内部可能生成的 p 标签带来的多余二次间距叠加 */
+  .prose-custom li > p,
+  .tiptap li > p {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
   }
 
   .prose-custom :not(pre) > code {

@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { EditorContent, Node as TiptapNode, mergeAttributes } from '@tiptap/react';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
@@ -129,6 +130,73 @@ interface EditorProps {
   onActiveHeadingChange?: (id: string | null) => void;
 }
 
+function ToolbarDropdownPortal({
+  anchorRef,
+  isOpen,
+  onClose,
+  children,
+  className,
+}: {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !anchorRef.current) return;
+
+    const updatePosition = () => {
+      if (!anchorRef.current) return;
+      const rect = anchorRef.current.getBoundingClientRect();
+      const maxLeft = typeof window !== 'undefined' ? Math.max(8, window.innerWidth - 190) : rect.left;
+      const left = Math.max(8, Math.min(rect.left, maxLeft));
+      setCoords({
+        top: rect.bottom + 4,
+        left,
+      });
+    };
+
+    updatePosition();
+
+    const handleScroll = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.('[data-toolbar-dropdown="true"]')) {
+        return;
+      }
+      onClose();
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [isOpen, anchorRef, onClose]);
+
+  if (!isOpen || !coords) return null;
+
+  return createPortal(
+    <div
+      data-toolbar-dropdown="true"
+      style={{
+        position: 'fixed',
+        top: `${coords.top}px`,
+        left: `${coords.left}px`,
+        zIndex: 9999,
+      }}
+      className={className}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+}
+
 function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbarVisible, setIsToolbarVisible, searchQuery, searchVersion = 0, searchOptions = { caseSensitive: false, wholeWord: false }, searchNavigation, searchJump, onSearchMatchCount, onSearchActiveMatchIndex, onHeadingsChange, scrollToPos, editor, onInsertImage, onSaveImageFile, onSelectionChange, showToast, onActiveHeadingChange }: EditorProps) {
   const { settings, updateSettings } = useSettings();
   const { provider, chatPreferences, memory, updateMemory } = useAI();
@@ -190,8 +258,9 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
         mathMenuRef.current?.contains(target) ||
         lineHeightMenuRef.current?.contains(target) ||
         tablePaddingMenuRef.current?.contains(target);
+      const insideDropdown = (target as Element | null)?.closest?.('[data-toolbar-dropdown="true"]');
 
-      if (!inside) {
+      if (!inside && !insideDropdown) {
         setShowHeadingMenu(false);
         setShowTableMenu(false);
         setShowMathMenu(false);
@@ -216,7 +285,7 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showHeadingMenu, showTableMenu, showLineHeightMenu, showTablePaddingMenu]);
+  }, [showHeadingMenu, showTableMenu, showMathMenu, showLineHeightMenu, showTablePaddingMenu]);
 
   const scrollToPosition = (pos: number) => {
     if (!editor) {
@@ -964,22 +1033,30 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
   const diffLines = inlinePanel.result ? buildDiffLines(selectionInfo?.text ?? '', inlinePanel.result) : [];
 
   return (
-    <main className="flex-1 min-w-0 flex flex-col bg-white dark:bg-[#121212] relative transition-colors duration-200">
+    <main className="flex-1 min-w-0 flex flex-col bg-white dark:bg-[#121212] relative transition-colors duration-200 overflow-hidden">
       {/* Editor Toolbar */}
       {isToolbarVisible && (
-        <div className="editor-toolbar print-hide flex items-center justify-between px-6 py-2 border-b border-slate-100 dark:border-[#27272A] bg-white/80 dark:bg-[#121212]/80 backdrop-blur-sm z-30 sticky top-0 transition-colors duration-200">
-          <div className="flex items-center gap-0.5">
-          <button onClick={handleBold} className={cn("p-1.5 rounded transition-colors", editor.isActive('bold') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="加粗 (Ctrl+B)"><Bold size={16} /></button>
-          <button onClick={handleItalic} className={cn("p-1.5 rounded transition-colors", editor.isActive('italic') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="斜体 (Ctrl+I)"><Italic size={16} /></button>
-          <button onClick={handleStrikethrough} className={cn("p-1.5 rounded transition-colors", editor.isActive('strike') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="删除线"><Strikethrough size={16} /></button>
-          <button onClick={handleHighlight} className={cn("p-1.5 rounded transition-colors", editor.isActive('highlight') ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="文本高亮 (==text==)"><Highlighter size={16} /></button>
-          <button onClick={handleInlineCode} className={cn("p-1.5 rounded transition-colors", editor.isActive('code') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="行内代码 (`code`)"><Code size={16} /></button>
+        <div className="editor-toolbar print-hide flex items-center justify-between w-full max-w-full px-3 md:px-6 py-2 border-b border-slate-100 dark:border-[#27272A] bg-white/80 dark:bg-[#121212]/80 backdrop-blur-sm z-30 sticky top-0 transition-colors duration-200 gap-2">
+          <div
+            className="flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto no-scrollbar py-0.5"
+            onWheel={(e) => {
+              if (e.deltaY !== 0 && e.deltaX === 0) {
+                e.currentTarget.scrollLeft += e.deltaY;
+              }
+            }}
+          >
+          <button onClick={handleBold} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('bold') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="加粗 (Ctrl+B)"><Bold size={16} /></button>
+          <button onClick={handleItalic} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('italic') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="斜体 (Ctrl+I)"><Italic size={16} /></button>
+          <button onClick={handleStrikethrough} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('strike') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="删除线"><Strikethrough size={16} /></button>
+          <button onClick={handleHighlight} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('highlight') ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="文本高亮 (==text==)"><Highlighter size={16} /></button>
+          <button onClick={handleInlineCode} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('code') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="行内代码 (`code`)"><Code size={16} /></button>
           
-          <div className="relative ml-1" ref={headingMenuRef}>
+          <div className="relative ml-1 shrink-0" ref={headingMenuRef}>
             <button 
               onClick={() => {
                 setShowHeadingMenu(!showHeadingMenu);
                 setShowTableMenu(false);
+                setShowMathMenu(false);
                 setShowLineHeightMenu(false);
                 setShowTablePaddingMenu(false);
               }}
@@ -989,48 +1066,51 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
               <HeadingIcon size={16} />
               <ChevronDown size={12} />
             </button>
-            {showHeadingMenu && (
-              <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg z-50 w-32">
-                {[1, 2, 3, 4, 5, 6].map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => { 
-                      editor.chain().focus().toggleHeading({ level: level as any }).run();
-                      setShowHeadingMenu(false); 
-                    }}
-                    className={cn(
-                      "w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A]",
-                      editor.isActive('heading', { level }) ? "text-accent font-bold" : "text-slate-600 dark:text-slate-400"
-                    )}
-                  >
-                    Heading {level}
-                  </button>
-                ))}
+            <ToolbarDropdownPortal
+              anchorRef={headingMenuRef}
+              isOpen={showHeadingMenu}
+              onClose={() => setShowHeadingMenu(false)}
+              className="p-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg w-32"
+            >
+              {[1, 2, 3, 4, 5, 6].map((level) => (
                 <button
+                  key={level}
                   onClick={() => { 
-                    editor.chain().focus().setParagraph().run();
+                    editor.chain().focus().toggleHeading({ level: level as any }).run();
                     setShowHeadingMenu(false); 
                   }}
                   className={cn(
-                    "w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] border-t border-slate-100 dark:border-[#27272A] mt-1 pt-1",
-                    editor.isActive('paragraph') ? "text-accent font-bold" : "text-slate-600 dark:text-slate-400"
+                    "w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A]",
+                    editor.isActive('heading', { level }) ? "text-accent font-bold" : "text-slate-600 dark:text-slate-400"
                   )}
                 >
-                  Paragraph
+                  Heading {level}
                 </button>
-              </div>
-            )}
+              ))}
+              <button
+                onClick={() => { 
+                  editor.chain().focus().setParagraph().run();
+                  setShowHeadingMenu(false); 
+                }}
+                className={cn(
+                  "w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] border-t border-slate-100 dark:border-[#27272A] mt-1 pt-1",
+                  editor.isActive('paragraph') ? "text-accent font-bold" : "text-slate-600 dark:text-slate-400"
+                )}
+              >
+                Paragraph
+              </button>
+            </ToolbarDropdownPortal>
           </div>
 
-          <div className="w-px h-4 bg-slate-200 dark:bg-[#27272A] mx-1 transition-colors duration-200"></div>
+          <div className="w-px h-4 bg-slate-200 dark:bg-[#27272A] mx-1 transition-colors duration-200 shrink-0"></div>
 
-          <button onClick={handleList} className={cn("p-1.5 rounded transition-colors", editor.isActive('bulletList') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="无序列表"><List size={16} /></button>
-          <button onClick={handleOrderedList} className={cn("p-1.5 rounded transition-colors", editor.isActive('orderedList') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="有序列表"><ListOrdered size={16} /></button>
-          <button onClick={handleTaskList} className={cn("p-1.5 rounded transition-colors", editor.isActive('taskList') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="待办任务清单"><CheckSquare size={16} /></button>
-          <button onClick={handleQuote} className={cn("p-1.5 rounded transition-colors", editor.isActive('blockquote') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="引用"><Quote size={16} /></button>
-          <button onClick={handleCode} className={cn("p-1.5 rounded transition-colors", editor.isActive('codeBlock') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="代码块"><Code2 size={16} /></button>
+          <button onClick={handleList} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('bulletList') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="无序列表"><List size={16} /></button>
+          <button onClick={handleOrderedList} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('orderedList') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="有序列表"><ListOrdered size={16} /></button>
+          <button onClick={handleTaskList} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('taskList') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="待办任务清单"><CheckSquare size={16} /></button>
+          <button onClick={handleQuote} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('blockquote') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="引用"><Quote size={16} /></button>
+          <button onClick={handleCode} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('codeBlock') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="代码块"><Code2 size={16} /></button>
           
-          <div className="relative" ref={mathMenuRef}>
+          <div className="relative shrink-0" ref={mathMenuRef}>
             <button
               onClick={() => {
                 setShowMathMenu(!showMathMenu);
@@ -1050,38 +1130,42 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
               <Sigma size={16} />
               <ChevronDown size={10} />
             </button>
-            {showMathMenu && (
-              <div className="absolute top-full left-0 mt-1 p-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg shadow-xl z-50 w-44">
-                <button
-                  onClick={() => {
-                    handleInsertMathInline();
-                    setShowMathMenu(false);
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between text-slate-700 dark:text-slate-200"
-                >
-                  <span>行内公式 ($...$)</span>
-                  <span className="text-[10px] text-slate-400">Ctrl+M</span>
-                </button>
-                <button
-                  onClick={() => {
-                    handleInsertMathBlock();
-                    setShowMathMenu(false);
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between text-slate-700 dark:text-slate-200"
-                >
-                  <span>公式块 ($$...$$)</span>
-                  <span className="text-[10px] text-slate-400">Ctrl+Shift+M</span>
-                </button>
-              </div>
-            )}
+            <ToolbarDropdownPortal
+              anchorRef={mathMenuRef}
+              isOpen={showMathMenu}
+              onClose={() => setShowMathMenu(false)}
+              className="p-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-lg shadow-xl w-44"
+            >
+              <button
+                onClick={() => {
+                  handleInsertMathInline();
+                  setShowMathMenu(false);
+                }}
+                className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between text-slate-700 dark:text-slate-200"
+              >
+                <span>行内公式 ($...$)</span>
+                <span className="text-[10px] text-slate-400">Ctrl+M</span>
+              </button>
+              <button
+                onClick={() => {
+                  handleInsertMathBlock();
+                  setShowMathMenu(false);
+                }}
+                className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between text-slate-700 dark:text-slate-200"
+              >
+                <span>公式块 ($$...$$)</span>
+                <span className="text-[10px] text-slate-400">Ctrl+Shift+M</span>
+              </button>
+            </ToolbarDropdownPortal>
           </div>
 
-          <button onClick={handleHorizontalRule} className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] rounded transition-colors" title="分割线"><Minus size={16} /></button>
-          <div className="relative" ref={tableMenuRef}>
+          <button onClick={handleHorizontalRule} className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] rounded transition-colors shrink-0" title="分割线"><Minus size={16} /></button>
+          <div className="relative shrink-0" ref={tableMenuRef}>
             <button
               onClick={() => {
                 setShowTableMenu(!showTableMenu);
                 setShowHeadingMenu(false);
+                setShowMathMenu(false);
                 setShowLineHeightMenu(false);
                 setShowTablePaddingMenu(false);
               }}
@@ -1091,126 +1175,130 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
               <TableIcon size={16} />
               <ChevronDown size={12} />
             </button>
-            {showTableMenu && (
-              <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg z-50 w-44">
+            <ToolbarDropdownPortal
+              anchorRef={tableMenuRef}
+              isOpen={showTableMenu}
+              onClose={() => setShowTableMenu(false)}
+              className="p-2 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg w-44"
+            >
+              <button
+                onClick={() => { handleTable(); setShowTableMenu(false); }}
+                className="w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200"
+              >
+                插入表格 3×3
+              </button>
+              <div className="my-1 border-t border-slate-100 dark:border-[#27272A]" />
+              {[
+                { label: '上方插入行', action: handleAddRowBefore },
+                { label: '下方插入行', action: handleAddRowAfter },
+                { label: '左侧插入列', action: handleAddColumnBefore },
+                { label: '右侧插入列', action: handleAddColumnAfter },
+              ].map((item) => {
+                const enabled = editor.isActive('table');
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => { item.action(); setShowTableMenu(false); }}
+                    className={cn(
+                      "w-full text-left px-2 py-1 text-xs rounded",
+                      enabled
+                        ? "hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200"
+                        : "text-slate-400 cursor-not-allowed"
+                    )}
+                    disabled={!enabled}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+              <div className="my-1 border-t border-slate-100 dark:border-[#27272A]" />
+              {[
+                { label: '删除当前行', action: handleDeleteRow },
+                { label: '删除当前列', action: handleDeleteColumn },
+                { label: '删除表格', action: handleDeleteTable },
+              ].map((item) => {
+                const enabled = editor.isActive('table');
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => { item.action(); setShowTableMenu(false); }}
+                    className={cn(
+                      "w-full text-left px-2 py-1 text-xs rounded",
+                      enabled
+                        ? "hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200"
+                        : "text-slate-400 cursor-not-allowed"
+                    )}
+                    disabled={!enabled}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+              <div className="my-1 border-t border-slate-100 dark:border-[#27272A]" />
+              <div className="px-2 py-1 text-[10px] font-semibold text-slate-400">当前列对齐</div>
+              <div className="flex items-center gap-1 px-1 mb-1">
                 <button
-                  onClick={() => { handleTable(); setShowTableMenu(false); }}
-                  className="w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200"
+                  type="button"
+                  onClick={() => { handleAlignColumn('left'); setShowTableMenu(false); }}
+                  className="flex-1 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200 text-center"
+                  title="当前列左对齐"
                 >
-                  插入表格 3×3
+                  居左
                 </button>
-                <div className="my-1 border-t border-slate-100 dark:border-[#27272A]" />
-                {[
-                  { label: '上方插入行', action: handleAddRowBefore },
-                  { label: '下方插入行', action: handleAddRowAfter },
-                  { label: '左侧插入列', action: handleAddColumnBefore },
-                  { label: '右侧插入列', action: handleAddColumnAfter },
-                ].map((item) => {
-                  const enabled = editor.isActive('table');
-                  return (
-                    <button
-                      key={item.label}
-                      onClick={() => { item.action(); setShowTableMenu(false); }}
-                      className={cn(
-                        "w-full text-left px-2 py-1 text-xs rounded",
-                        enabled
-                          ? "hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200"
-                          : "text-slate-400 cursor-not-allowed"
-                      )}
-                      disabled={!enabled}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-                <div className="my-1 border-t border-slate-100 dark:border-[#27272A]" />
-                {[
-                  { label: '删除当前行', action: handleDeleteRow },
-                  { label: '删除当前列', action: handleDeleteColumn },
-                  { label: '删除表格', action: handleDeleteTable },
-                ].map((item) => {
-                  const enabled = editor.isActive('table');
-                  return (
-                    <button
-                      key={item.label}
-                      onClick={() => { item.action(); setShowTableMenu(false); }}
-                      className={cn(
-                        "w-full text-left px-2 py-1 text-xs rounded",
-                        enabled
-                          ? "hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200"
-                          : "text-slate-400 cursor-not-allowed"
-                      )}
-                      disabled={!enabled}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-                <div className="my-1 border-t border-slate-100 dark:border-[#27272A]" />
-                <div className="px-2 py-1 text-[10px] font-semibold text-slate-400">当前列对齐</div>
-                <div className="flex items-center gap-1 px-1 mb-1">
-                  <button
-                    type="button"
-                    onClick={() => { handleAlignColumn('left'); setShowTableMenu(false); }}
-                    className="flex-1 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200 text-center"
-                    title="当前列左对齐"
-                  >
-                    居左
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { handleAlignColumn('center'); setShowTableMenu(false); }}
-                    className="flex-1 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200 text-center"
-                    title="当前列居中对齐"
-                  >
-                    居中
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { handleAlignColumn('right'); setShowTableMenu(false); }}
-                    className="flex-1 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200 text-center"
-                    title="当前列右对齐"
-                  >
-                    靠右
-                  </button>
-                </div>
-                <div className="my-1 border-t border-slate-100 dark:border-[#27272A]" />
-                {[
-                  { label: '自适应内容列宽 (推荐)', action: handleAutoFitColumns },
-                  { label: '均等分配各列列宽', action: handleEqualColumns },
-                  { label: '切换表头行', action: handleToggleHeaderRow },
-                  { label: '切换表头列', action: handleToggleHeaderColumn },
-                ].map((item) => {
-                  const enabled = editor.isActive('table');
-                  return (
-                    <button
-                      key={item.label}
-                      onClick={() => { item.action(); setShowTableMenu(false); }}
-                      className={cn(
-                        "w-full text-left px-2 py-1 text-xs rounded",
-                        enabled
-                          ? "hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200"
-                          : "text-slate-400 cursor-not-allowed"
-                      )}
-                      disabled={!enabled}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
+                <button
+                  type="button"
+                  onClick={() => { handleAlignColumn('center'); setShowTableMenu(false); }}
+                  className="flex-1 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200 text-center"
+                  title="当前列居中对齐"
+                >
+                  居中
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { handleAlignColumn('right'); setShowTableMenu(false); }}
+                  className="flex-1 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200 text-center"
+                  title="当前列右对齐"
+                >
+                  靠右
+                </button>
               </div>
-            )}
+              <div className="my-1 border-t border-slate-100 dark:border-[#27272A]" />
+              {[
+                { label: '自适应内容列宽 (推荐)', action: handleAutoFitColumns },
+                { label: '均等分配各列列宽', action: handleEqualColumns },
+                { label: '切换表头行', action: handleToggleHeaderRow },
+                { label: '切换表头列', action: handleToggleHeaderColumn },
+              ].map((item) => {
+                const enabled = editor.isActive('table');
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => { item.action(); setShowTableMenu(false); }}
+                    className={cn(
+                      "w-full text-left px-2 py-1 text-xs rounded",
+                      enabled
+                        ? "hover:bg-slate-100 dark:hover:bg-[#27272A] text-slate-700 dark:text-slate-200"
+                        : "text-slate-400 cursor-not-allowed"
+                    )}
+                    disabled={!enabled}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </ToolbarDropdownPortal>
           </div>
-          <div className="w-px h-4 bg-slate-200 dark:bg-[#27272A] mx-1 transition-colors duration-200"></div>
-          <button onClick={handleLink} className={cn("p-1.5 rounded transition-colors", editor.isActive('link') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="超链接"><Link size={16} /></button>
-          <button onClick={handleImage} className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] rounded transition-colors" title="插入图片"><ImageIcon size={16} /></button>
+          <div className="w-px h-4 bg-slate-200 dark:bg-[#27272A] mx-1 transition-colors duration-200 shrink-0"></div>
+          <button onClick={handleLink} className={cn("p-1.5 rounded transition-colors shrink-0", editor.isActive('link') ? "bg-accent-soft text-accent" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A]")} title="超链接"><Link size={16} /></button>
+          <button onClick={handleImage} className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] rounded transition-colors shrink-0" title="插入图片"><ImageIcon size={16} /></button>
           
-          <div className="relative ml-2" ref={lineHeightMenuRef}>
+          <div className="relative ml-2 shrink-0" ref={lineHeightMenuRef}>
             <button 
               onClick={() => {
                 setShowLineHeightMenu(!showLineHeightMenu);
                 setShowHeadingMenu(false);
                 setShowTableMenu(false);
+                setShowMathMenu(false);
                 setShowTablePaddingMenu(false);
               }}
               className="flex items-center gap-1 p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] rounded transition-colors"
@@ -1219,71 +1307,75 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
               <SlidersHorizontal size={16} />
               <ChevronDown size={12} />
             </button>
-            {showLineHeightMenu && (
-              <div className="absolute top-full left-0 mt-1 p-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg z-50 w-44">
-                <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 border-b border-slate-100 dark:border-[#27272A] mb-1">
-                  文本行间距 (Line Height)
-                </div>
-                {[
-                  { label: '1.5 (紧凑速记)', val: 1.5 },
-                  { label: '1.75 (舒适标准)', val: 1.75 },
-                  { label: '2.0 (双倍透气)', val: 2.0 },
-                  { label: '2.2 (超宽留白)', val: 2.2 },
-                ].map(({ label, val }) => (
-                  <button
-                    key={val}
-                    onClick={() => { 
-                      setLineHeight(val);
-                      updateSettings({ lineHeight: val });
-                      document.documentElement.style.setProperty('--editor-line-height', `${val}`);
-                      setShowLineHeightMenu(false);
-                    }}
-                    className={cn(
-                      "w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between transition-colors",
-                      lineHeight === val ? "text-accent font-bold bg-accent-soft" : "text-slate-600 dark:text-slate-400"
-                    )}
-                  >
-                    <span>{label}</span>
-                    {lineHeight === val && <Check size={12} className="text-accent" />}
-                  </button>
-                ))}
-
-                <div className="px-2 pt-2 pb-1 text-[10px] font-semibold text-slate-400 border-t border-slate-100 dark:border-[#27272A] mt-1 mb-1">
-                  段落间距 (Paragraph Spacing)
-                </div>
-                {[
-                  { label: '紧凑贴合 (4px)', val: 0.25 },
-                  { label: '适中标准 (8px)', val: 0.5 },
-                  { label: '宽松舒适 (14px)', val: 0.8 },
-                  { label: '大段留白 (20px)', val: 1.2 },
-                ].map(({ label, val }) => (
-                  <button
-                    key={val}
-                    onClick={() => { 
-                      setParagraphSpacing(val);
-                      updateSettings({ paragraphSpacing: val });
-                      document.documentElement.style.setProperty('--editor-paragraph-spacing', `${val}em`);
-                      setShowLineHeightMenu(false);
-                    }}
-                    className={cn(
-                      "w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between transition-colors",
-                      paragraphSpacing === val ? "text-accent font-bold bg-accent-soft" : "text-slate-600 dark:text-slate-400"
-                    )}
-                  >
-                    <span>{label}</span>
-                    {paragraphSpacing === val && <Check size={12} className="text-accent" />}
-                  </button>
-                ))}
+            <ToolbarDropdownPortal
+              anchorRef={lineHeightMenuRef}
+              isOpen={showLineHeightMenu}
+              onClose={() => setShowLineHeightMenu(false)}
+              className="p-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg w-44"
+            >
+              <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 border-b border-slate-100 dark:border-[#27272A] mb-1">
+                文本行间距 (Line Height)
               </div>
-            )}
+              {[
+                { label: '1.5 (紧凑速记)', val: 1.5 },
+                { label: '1.75 (舒适标准)', val: 1.75 },
+                { label: '2.0 (双倍透气)', val: 2.0 },
+                { label: '2.2 (超宽留白)', val: 2.2 },
+              ].map(({ label, val }) => (
+                <button
+                  key={val}
+                  onClick={() => { 
+                    setLineHeight(val);
+                    updateSettings({ lineHeight: val });
+                    document.documentElement.style.setProperty('--editor-line-height', `${val}`);
+                    setShowLineHeightMenu(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between transition-colors",
+                    lineHeight === val ? "text-accent font-bold bg-accent-soft" : "text-slate-600 dark:text-slate-400"
+                  )}
+                >
+                  <span>{label}</span>
+                  {lineHeight === val && <Check size={12} className="text-accent" />}
+                </button>
+              ))}
+
+              <div className="px-2 pt-2 pb-1 text-[10px] font-semibold text-slate-400 border-t border-slate-100 dark:border-[#27272A] mt-1 mb-1">
+                段落间距 (Paragraph Spacing)
+              </div>
+              {[
+                { label: '紧凑贴合 (4px)', val: 0.25 },
+                { label: '适中标准 (8px)', val: 0.5 },
+                { label: '宽松舒适 (14px)', val: 0.8 },
+                { label: '大段留白 (20px)', val: 1.2 },
+              ].map(({ label, val }) => (
+                <button
+                  key={val}
+                  onClick={() => { 
+                    setParagraphSpacing(val);
+                    updateSettings({ paragraphSpacing: val });
+                    document.documentElement.style.setProperty('--editor-paragraph-spacing', `${val}em`);
+                    setShowLineHeightMenu(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between transition-colors",
+                    paragraphSpacing === val ? "text-accent font-bold bg-accent-soft" : "text-slate-600 dark:text-slate-400"
+                  )}
+                >
+                  <span>{label}</span>
+                  {paragraphSpacing === val && <Check size={12} className="text-accent" />}
+                </button>
+              ))}
+            </ToolbarDropdownPortal>
           </div>
 
-          <div className="relative ml-1" ref={tablePaddingMenuRef}>
+          <div className="relative ml-1 shrink-0" ref={tablePaddingMenuRef}>
             <button 
               onClick={() => {
                 setShowTablePaddingMenu(!showTablePaddingMenu);
                 setShowHeadingMenu(false);
                 setShowTableMenu(false);
+                setShowMathMenu(false);
                 setShowLineHeightMenu(false);
               }}
               className="flex items-center gap-1 p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#27272A] rounded transition-colors"
@@ -1292,34 +1384,37 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
               <Rows size={16} />
               <ChevronDown size={12} />
             </button>
-            {showTablePaddingMenu && (
-              <div className="absolute top-full left-0 mt-1 p-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg z-50 w-36">
-                <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 border-b border-slate-100 dark:border-[#27272A] mb-1">表格行距与内边距</div>
-                {[
-                  { label: '超紧凑 (2px)', value: 0.15 },
-                  { label: '紧凑常用 (5px)', value: 0.32 },
-                  { label: '舒适适中 (8px)', value: 0.55 },
-                  { label: '宽敞松散 (15px)', value: 0.95 }
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => { setTablePadding(option.value); setShowTablePaddingMenu(false); }}
-                    className={cn(
-                      "w-full text-left px-2 py-1.5 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between transition-colors",
-                      tablePadding === option.value ? "text-accent font-bold bg-accent-soft" : "text-slate-600 dark:text-slate-400"
-                    )}
-                  >
-                    <span>{option.label}</span>
-                    {tablePadding === option.value && <Check size={12} className="text-accent" />}
-                  </button>
-                ))}
-              </div>
-            )}
+            <ToolbarDropdownPortal
+              anchorRef={tablePaddingMenuRef}
+              isOpen={showTablePaddingMenu}
+              onClose={() => setShowTablePaddingMenu(false)}
+              className="p-1.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg w-36"
+            >
+              <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 border-b border-slate-100 dark:border-[#27272A] mb-1">表格行距与内边距</div>
+              {[
+                { label: '超紧凑 (2px)', value: 0.15 },
+                { label: '紧凑常用 (5px)', value: 0.32 },
+                { label: '舒适适中 (8px)', value: 0.55 },
+                { label: '宽敞松散 (15px)', value: 0.95 }
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => { setTablePadding(option.value); setShowTablePaddingMenu(false); }}
+                  className={cn(
+                    "w-full text-left px-2 py-1.5 text-xs rounded hover:bg-slate-100 dark:hover:bg-[#27272A] flex items-center justify-between transition-colors",
+                    tablePadding === option.value ? "text-accent font-bold bg-accent-soft" : "text-slate-600 dark:text-slate-400"
+                  )}
+                >
+                  <span>{option.label}</span>
+                  {tablePadding === option.value && <Check size={12} className="text-accent" />}
+                </button>
+              ))}
+            </ToolbarDropdownPortal>
           </div>
-          <div className="w-px h-4 bg-slate-200 dark:bg-[#27272A] mx-2 transition-colors duration-200"></div>
+          <div className="w-px h-4 bg-slate-200 dark:bg-[#27272A] mx-2 transition-colors duration-200 shrink-0"></div>
         </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-100 dark:bg-[#18181B] p-0.5 rounded-lg border border-transparent dark:border-[#27272A] mr-2">
+          <div className="flex items-center gap-2 shrink-0 bg-white dark:bg-[#121212] pl-2 z-10 border-l border-slate-100 dark:border-[#27272A]/50">
+            <div className="flex items-center bg-slate-100 dark:bg-[#18181B] p-0.5 rounded-lg border border-transparent dark:border-[#27272A] mr-1">
               <button
                 onClick={() => setViewMode('wysiwyg')}
                 aria-label="所见即所得"

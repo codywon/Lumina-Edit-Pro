@@ -81,6 +81,7 @@ import {
   writeNativeWorkspaceFile,
 } from './services/workspace';
 import { getNativeCliOpenFile, nativeClient, setNativeWindowTitle } from './services/native';
+import { normalizeCjkEmphasis } from './lib/pangu';
 
 const lowlight = createLowlight(common);
 const NATIVE_WORKSPACE_REFRESH_INTERVAL_MS = 5000;
@@ -343,6 +344,17 @@ function collectWorkspaceFiles(entries: WorkspaceEntry[], accumulator: Workspace
   return accumulator;
 }
 
+function collectWorkspaceDirectories(entries: WorkspaceEntry[], accumulator: string[] = []) {
+  for (const entry of entries) {
+    if (entry.kind === 'directory') {
+      accumulator.push(entry.path);
+      collectWorkspaceDirectories(entry.children, accumulator);
+    }
+  }
+
+  return accumulator;
+}
+
 function buildWorkspaceEntriesSignature(entries: WorkspaceEntry[]) {
   const parts: string[] = [];
   const visit = (items: WorkspaceEntry[]) => {
@@ -571,6 +583,10 @@ function AppContent() {
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceDirectoryHandle, setWorkspaceDirectoryHandle] = useState<any>(null);
   const [workspaceEntries, setWorkspaceEntries] = useState<WorkspaceEntry[]>([]);
+  const workspaceDirectories = useMemo(
+    () => collectWorkspaceDirectories(workspaceEntries),
+    [workspaceEntries]
+  );
   const [workspaceWritable, setWorkspaceWritable] = useState(false);
   const [activeWorkspaceFilePath, setActiveWorkspaceFilePathState] = useState<string | null>(null);
   const [selectedText, setSelectedText] = useState('');
@@ -1410,8 +1426,9 @@ function AppContent() {
       const currentMd = (editor.storage as any).markdown?.getMarkdown?.();
       const parsed = parseFrontmatter(content);
       const targetBody = parsed.frontmatter ? parsed.body : content;
-      if (targetBody !== currentMd) {
-        editor.commands.setContent(targetBody);
+      const normalizedTarget = normalizeCjkEmphasis(targetBody);
+      if (normalizedTarget !== currentMd && targetBody !== currentMd) {
+        editor.commands.setContent(normalizedTarget);
       }
     }
   }, [content, editor]);
@@ -1571,7 +1588,7 @@ function AppContent() {
       contentRef.current = normalizedContent;
       lastSavedContentRef.current = normalizedContent;
       if (editor) {
-        editor.commands.setContent(parsed.body);
+        editor.commands.setContent(normalizeCjkEmphasis(parsed.body));
       }
     } else {
       currentRawFrontmatterRef.current = null;
@@ -1579,7 +1596,7 @@ function AppContent() {
       contentRef.current = nextContent;
       lastSavedContentRef.current = nextContent;
       if (editor) {
-        editor.commands.setContent(nextContent);
+        editor.commands.setContent(normalizeCjkEmphasis(nextContent));
       }
     }
   };
@@ -1592,14 +1609,14 @@ function AppContent() {
       setContent(normalizedContent);
       contentRef.current = normalizedContent;
       if (editor) {
-        editor.commands.setContent(parsed.body);
+        editor.commands.setContent(normalizeCjkEmphasis(parsed.body));
       }
     } else {
       currentRawFrontmatterRef.current = null;
       setContent(nextContent);
       contentRef.current = nextContent;
       if (editor) {
-        editor.commands.setContent(nextContent);
+        editor.commands.setContent(normalizeCjkEmphasis(nextContent));
       }
     }
   };
@@ -2172,7 +2189,7 @@ function AppContent() {
     }
   };
 
-  const resolveWorkspaceDirectoryHandle = async (directoryPath: string | null) => {
+  const resolveWorkspaceDirectoryHandle = async (directoryPath: string | null, createIfMissing = false) => {
     if (!workspaceDirectoryHandle) {
       return null;
     }
@@ -2185,7 +2202,7 @@ function AppContent() {
     let currentHandle = workspaceDirectoryHandle;
     const segments = directoryPath.split('/').filter(Boolean);
     for (const segment of segments) {
-      currentHandle = await currentHandle.getDirectoryHandle(segment);
+      currentHandle = await currentHandle.getDirectoryHandle(segment, { create: createIfMissing });
     }
     return currentHandle;
   };
@@ -2243,7 +2260,7 @@ function AppContent() {
         return true;
       }
 
-      const targetHandle = await resolveWorkspaceDirectoryHandle(directoryPath);
+      const targetHandle = await resolveWorkspaceDirectoryHandle(directoryPath, true);
       if (!targetHandle || typeof targetHandle.getFileHandle !== 'function') {
         showErrorToast('\u5f53\u524d\u5de5\u4f5c\u533a\u65e0\u6cd5\u5199\u5165\u5230\u76ee\u6807\u76ee\u5f55');
         return false;
@@ -2338,11 +2355,12 @@ function AppContent() {
   };
 
   const handleInsertClippedContent = (markdown: string) => {
+    const normalized = normalizeCjkEmphasis(markdown);
     if (editor) {
-      editor.chain().focus().insertContent(markdown).run();
+      editor.chain().focus().insertContent(normalized).run();
       showToast('已成功插入到当前文档', 'info');
     } else {
-      syncDocumentContent(content + '\n\n' + markdown);
+      syncDocumentContent(content + '\n\n' + normalized);
       showToast('已追加到当前文档末尾', 'info');
     }
   };
@@ -3020,7 +3038,7 @@ function AppContent() {
         />
         {aiPanelOpen && !settings.focusMode && (
           <div
-            className="print-hide h-full relative shrink-0"
+            className="print-hide h-full relative shrink-0 z-20"
             style={{ width: aiPanelWidth, minWidth: 300, maxWidth: '55vw' }}
           >
             <div
@@ -3120,6 +3138,7 @@ function AppContent() {
             documentFilePath={activeFileHandle?.path}
             hasActiveWorkspace={Boolean(workspaceName && workspaceWritable)}
             workspaceName={workspaceName || undefined}
+            workspaceDirectories={workspaceDirectories}
           />
         )}
         {isExportDocxModalOpen && (

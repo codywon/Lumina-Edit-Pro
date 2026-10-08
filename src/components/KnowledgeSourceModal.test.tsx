@@ -184,4 +184,128 @@ describe('KnowledgeSourceModal', () => {
       expect(screen.getByText('链接必须以 http:// 或 https:// 开头')).toBeInTheDocument();
     });
   });
+
+  it('remembers and restores previously saved directory from localStorage', async () => {
+    localStorage.setItem('lumina_clip_save_dir_default', 'clips/articles');
+
+    vi.spyOn(knowledgeLib, 'extractArticleFromUrl').mockResolvedValue({
+      metadata: {
+        title: '记忆目录测试',
+        sourceUrl: 'https://mp.weixin.qq.com/s/sample',
+        platform: 'wechat',
+        clippedAt: '2026-03-01T12:00:00.000Z',
+      },
+      markdown: '正文内容',
+      images: [],
+    });
+
+    const onCreateWorkspaceDocument = vi.fn().mockResolvedValue(true);
+
+    render(
+      <KnowledgeSourceModal
+        isOpen={true}
+        onClose={vi.fn()}
+        showToast={vi.fn()}
+        onInsertAtCursor={vi.fn()}
+        onCreateWorkspaceDocument={onCreateWorkspaceDocument}
+        hasActiveWorkspace={true}
+        workspaceName="worktrees"
+        workspaceDirectories={['clips/articles', 'notes']}
+      />
+    );
+
+    const input = screen.getByPlaceholderText(/https:\/\/mp\.weixin\.qq\.com\/\.\.\. 或 小红书 \/ 飞书链接\.\.\./);
+    fireEvent.change(input, { target: { value: 'https://mp.weixin.qq.com/s/sample' } });
+    fireEvent.click(screen.getByRole('button', { name: /解析链接/ }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('记忆目录测试')).toBeInTheDocument();
+    });
+
+    // Verify the select has clips/articles selected by default
+    const select = screen.getByLabelText('选择保存目录') as HTMLSelectElement;
+    expect(select.value).toBe('clips/articles');
+    expect(screen.getByText(/worktrees \/ clips\/articles/)).toBeInTheDocument();
+
+    // Click confirm save and verify subDirectory passed
+    fireEvent.click(screen.getByRole('button', { name: /新建文档并导入/ }));
+    await waitFor(() => {
+      expect(onCreateWorkspaceDocument).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        'clips/articles'
+      );
+    });
+  });
+
+  it('allows selecting different directory or custom new directory and resets to root', async () => {
+    localStorage.clear();
+
+    vi.spyOn(knowledgeLib, 'extractArticleFromUrl').mockResolvedValue({
+      metadata: {
+        title: '切换目录测试',
+        sourceUrl: 'https://mp.weixin.qq.com/s/sample',
+        platform: 'wechat',
+        clippedAt: '2026-03-01T12:00:00.000Z',
+      },
+      markdown: '正文内容',
+      images: [],
+    });
+
+    const onCreateWorkspaceDocument = vi.fn().mockResolvedValue(true);
+
+    render(
+      <KnowledgeSourceModal
+        isOpen={true}
+        onClose={vi.fn()}
+        showToast={vi.fn()}
+        onInsertAtCursor={vi.fn()}
+        onCreateWorkspaceDocument={onCreateWorkspaceDocument}
+        hasActiveWorkspace={true}
+        workspaceName="worktrees"
+        workspaceDirectories={['docs', 'notes']}
+      />
+    );
+
+    fireEvent.change(
+      screen.getByPlaceholderText(/https:\/\/mp\.weixin\.qq\.com\/\.\.\. 或 小红书 \/ 飞书链接\.\.\./),
+      { target: { value: 'https://mp.weixin.qq.com/s/sample' } }
+    );
+    fireEvent.click(screen.getByRole('button', { name: /解析链接/ }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('切换目录测试')).toBeInTheDocument();
+    });
+
+    const select = screen.getByLabelText('选择保存目录') as HTMLSelectElement;
+    // Default is root
+    expect(select.value).toBe('');
+
+    // Change to 'docs'
+    fireEvent.change(select, { target: { value: 'docs' } });
+    expect(select.value).toBe('docs');
+    expect(localStorage.getItem('lumina_clip_save_dir_default')).toBe('docs');
+
+    // Reset to root
+    const resetBtn = screen.getByRole('button', { name: /恢复根目录/ });
+    fireEvent.click(resetBtn);
+    expect(select.value).toBe('');
+    expect(localStorage.getItem('lumina_clip_save_dir_default')).toBe('');
+
+    // Switch to custom directory
+    fireEvent.change(select, { target: { value: '__custom__' } });
+    const customInput = screen.getByPlaceholderText(/输入子目录/);
+    fireEvent.change(customInput, { target: { value: 'custom/nested' } });
+    expect(localStorage.getItem('lumina_clip_save_dir_default')).toBe('custom/nested');
+
+    // Click confirm save
+    fireEvent.click(screen.getByRole('button', { name: /新建文档并导入/ }));
+    await waitFor(() => {
+      expect(onCreateWorkspaceDocument).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        'custom/nested'
+      );
+    });
+  });
 });

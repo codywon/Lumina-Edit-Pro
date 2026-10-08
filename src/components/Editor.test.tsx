@@ -709,5 +709,35 @@ describe('Editor toolbar commands', () => {
 
     expect(chain.setHorizontalRule).toHaveBeenCalled();
   });
+
+  it('renders toolbar with responsive scrollable container and portal dropdowns', () => {
+    const { editor } = renderEditor('wysiwyg');
+
+    // Toolbar container should constrain width and prevent overflowing outside editor
+    const toolbar = document.querySelector('.editor-toolbar');
+    expect(toolbar).not.toBeNull();
+    expect(toolbar).toHaveClass('w-full', 'max-w-full');
+
+    // Left formatting controls container should be scrollable without scrollbars
+    const scrollContainer = toolbar?.querySelector('.overflow-x-auto');
+    expect(scrollContainer).not.toBeNull();
+    expect(scrollContainer).toHaveClass('no-scrollbar', 'flex-1', 'min-w-0');
+
+    // Open Heading menu
+    const headingBtn = screen.getByTitle('标题');
+    fireEvent.click(headingBtn);
+
+    // Dropdown should be rendered via portal with data-toolbar-dropdown attribute
+    const headingDropdown = document.querySelector('[data-toolbar-dropdown="true"]');
+    expect(headingDropdown).not.toBeNull();
+    expect(screen.getByText('Heading 1')).toBeInTheDocument();
+    expect(screen.getByText('Paragraph')).toBeInTheDocument();
+
+    // Click heading option
+    fireEvent.click(screen.getByText('Heading 2'));
+    expect(editor.chain().focus().toggleHeading).toHaveBeenCalledWith({ level: 2 });
+    // Dropdown should close after selection
+    expect(document.querySelector('[data-toolbar-dropdown="true"]')).toBeNull();
+  });
 });
 

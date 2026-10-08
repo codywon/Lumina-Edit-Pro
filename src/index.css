@@ -106,6 +106,14 @@ body,
   .dark .custom-scrollbar::-webkit-scrollbar-thumb {
     background: #334155;
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
   
   .prose-custom {
     @apply prose prose-slate dark:prose-invert max-w-none;

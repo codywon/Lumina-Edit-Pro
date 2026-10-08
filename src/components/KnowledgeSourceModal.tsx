@@ -11,6 +11,9 @@ import {
   Clipboard,
   Layers,
   Sparkles,
+  Folder,
+  ChevronDown,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import {
@@ -33,6 +36,47 @@ interface KnowledgeSourceModalProps {
   documentFilePath?: string;
   hasActiveWorkspace?: boolean;
   workspaceName?: string;
+  workspaceDirectories?: string[];
+}
+
+const STORAGE_KEY_PREFIX = 'lumina_clip_save_dir_';
+const STORAGE_KEY_GLOBAL = 'lumina_clip_save_dir_default';
+
+function getStoredDirectory(workspaceId?: string, workspaceName?: string): string {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      if (workspaceId) {
+        const val = localStorage.getItem(`${STORAGE_KEY_PREFIX}${workspaceId}`);
+        if (val !== null) return val;
+      }
+      if (workspaceName) {
+        const val = localStorage.getItem(`${STORAGE_KEY_PREFIX}${workspaceName}`);
+        if (val !== null) return val;
+      }
+      const globalVal = localStorage.getItem(STORAGE_KEY_GLOBAL);
+      if (globalVal !== null) return globalVal;
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
+function storeSavedDirectory(dir: string, workspaceId?: string, workspaceName?: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const cleanDir = dir.trim().replace(/^[/\\]+|[/\\]+$/g, '');
+      if (workspaceId) {
+        localStorage.setItem(`${STORAGE_KEY_PREFIX}${workspaceId}`, cleanDir);
+      }
+      if (workspaceName) {
+        localStorage.setItem(`${STORAGE_KEY_PREFIX}${workspaceName}`, cleanDir);
+      }
+      localStorage.setItem(STORAGE_KEY_GLOBAL, cleanDir);
+    }
+  } catch {
+    // ignore
+  }
 }
 
 export default function KnowledgeSourceModal({
@@ -45,11 +89,13 @@ export default function KnowledgeSourceModal({
   documentFilePath,
   hasActiveWorkspace = false,
   workspaceName,
+  workspaceDirectories = [],
 }: KnowledgeSourceModalProps) {
   const [inputMode, setInputMode] = useState<'url' | 'html'>('url');
   const [url, setUrl] = useState('');
   const [htmlContent, setHtmlContent] = useState('');
   const [subDirectory, setSubDirectory] = useState('');
+  const [isCustomDir, setIsCustomDir] = useState(false);
   const [detectedPlatform, setDetectedPlatform] = useState<KnowledgePlatform>('generic');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -65,6 +111,15 @@ export default function KnowledgeSourceModal({
   const [isSaving, setIsSaving] = useState(false);
   const [progressText, setProgressText] = useState('');
 
+  const directoryOptions = React.useMemo(() => {
+    const list = Array.isArray(workspaceDirectories) ? [...workspaceDirectories] : [];
+    const filtered = list.filter((dir) => !dir.split('/').some((seg) => seg.startsWith('.')));
+    if (subDirectory && !filtered.includes(subDirectory)) {
+      filtered.push(subDirectory);
+    }
+    return filtered.sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  }, [workspaceDirectories, subDirectory]);
+
   useEffect(() => {
     if (!isOpen) {
       setUrl('');
@@ -75,10 +130,20 @@ export default function KnowledgeSourceModal({
       setIsExtracting(false);
       setIsSaving(false);
       setProgressText('');
+      setIsCustomDir(false);
     } else {
       setSaveMode(hasActiveWorkspace ? 'new-file' : 'insert-cursor');
+      const savedDir = getStoredDirectory(workspaceId, workspaceName);
+      setSubDirectory(savedDir);
+      setIsCustomDir(false);
     }
-  }, [isOpen, hasActiveWorkspace]);
+  }, [isOpen, hasActiveWorkspace, workspaceId, workspaceName]);
+
+  const handleSubDirectoryChange = (newDir: string) => {
+    const clean = newDir.replace(/[\\:*?"<>|]/g, '');
+    setSubDirectory(clean);
+    storeSavedDirectory(clean, workspaceId, workspaceName);
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -223,6 +288,7 @@ export default function KnowledgeSourceModal({
 
       if (saveMode === 'new-file' && onCreateWorkspaceDocument) {
         setProgressText('正在写入新文档...');
+        storeSavedDirectory(subDirectory, workspaceId, workspaceName);
         const success = await onCreateWorkspaceDocument(prepared.suggestedFileName, prepared.fullMarkdown, subDirectory);
         if (success) {
           const assetMsg = prepared.localizationResult?.localizedCount
@@ -535,18 +601,84 @@ export default function KnowledgeSourceModal({
                 </div>
 
                 {saveMode === 'new-file' && (
-                  <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400 bg-neutral-100/70 dark:bg-neutral-900/60 px-3 py-1.5 rounded-lg border border-neutral-200/60 dark:border-neutral-800">
-                    <span className="truncate mr-2">
-                      保存至：{workspaceName ? `${workspaceName}${subDirectory ? ` / ${subDirectory}` : ' (根目录)'}` : '未打开工作区（将在编辑器直接载入）'}
-                    </span>
-                    {hasActiveWorkspace && (
-                      <input
-                        type="text"
-                        value={subDirectory}
-                        onChange={(e) => setSubDirectory(e.target.value.replace(/[\\:*?"<>|]/g, ''))}
-                        placeholder="保存子目录 (可选)"
-                        className="text-[11px] px-2 py-0.5 rounded bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 focus:outline-none focus:border-orange-500 w-36 text-right placeholder:text-neutral-400 shrink-0"
-                      />
+                  <div className="rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/40 p-2.5 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 font-medium text-neutral-700 dark:text-neutral-300">
+                        <Folder className="w-3.5 h-3.5 text-orange-500" />
+                        <span>保存目录</span>
+                        {hasActiveWorkspace && (
+                          <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-normal">
+                            (自动记忆为默认目录)
+                          </span>
+                        )}
+                      </div>
+                      {hasActiveWorkspace && (subDirectory || isCustomDir) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomDir(false);
+                            handleSubDirectoryChange('');
+                          }}
+                          className="text-[11px] text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>恢复根目录</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {hasActiveWorkspace ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <select
+                              aria-label="选择保存目录"
+                              value={isCustomDir ? '__custom__' : subDirectory}
+                              onChange={(e) => {
+                                if (e.target.value === '__custom__') {
+                                  setIsCustomDir(true);
+                                } else {
+                                  setIsCustomDir(false);
+                                  handleSubDirectoryChange(e.target.value);
+                                }
+                              }}
+                              className="w-full text-xs py-1.5 pl-2.5 pr-7 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-800 dark:text-neutral-200 focus:outline-none focus:border-orange-500 transition-colors cursor-pointer appearance-none truncate"
+                            >
+                              <option value="">📂 {workspaceName || '工作区'} (根目录)</option>
+                              {directoryOptions.map((dir) => (
+                                <option key={dir} value={dir}>
+                                  📁 {dir}
+                                </option>
+                              ))}
+                              <option value="__custom__">✏️ 自定义/新建子目录...</option>
+                            </select>
+                            <ChevronDown className="w-3.5 h-3.5 text-neutral-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          </div>
+
+                          {isCustomDir && (
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={subDirectory}
+                                onChange={(e) => handleSubDirectoryChange(e.target.value)}
+                                placeholder="输入子目录 (如: 剪藏 或 notes/clips)"
+                                className="w-full text-xs px-2.5 py-1.5 bg-white dark:bg-neutral-800 border border-orange-500 rounded-lg text-neutral-800 dark:text-neutral-200 focus:outline-none placeholder:text-neutral-400"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
+                          <span className="truncate">
+                            目标路径: <span className="font-mono text-neutral-700 dark:text-neutral-300 font-medium">{workspaceName || '工作区'}{subDirectory ? ` / ${subDirectory}` : ' (根目录)'}</span>
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                        未打开工作区（将在编辑器直接载入当前文档）
+                      </div>
                     )}
                   </div>
                 )}

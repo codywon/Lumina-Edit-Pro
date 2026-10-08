@@ -1,3 +1,5 @@
+import { normalizeCjkEmphasis } from '../pangu';
+
 /**
  * Specialized HTML to Markdown converter for Lumina Edit Pro
  * Supports GFM tables, nested lists, tasklists, callouts, math formulas, and code blocks.
@@ -82,14 +84,16 @@ function processNode(node: Node, ctx: Context): string {
     return '\n\n---\n\n';
   }
 
-  // Strong / Bold
-  if (['strong', 'b'].includes(tag)) {
+  // Strong / Bold (tag or font-weight style)
+  const isBold = ['strong', 'b'].includes(tag) || /font-weight\s*:\s*(bold|[6-9]00)/i.test(style);
+  if (isBold) {
     const inner = processChildren(el, ctx).trim();
     return inner ? `**${inner}**` : '';
   }
 
-  // Emphasis / Italic
-  if (['em', 'i'].includes(tag)) {
+  // Emphasis / Italic (tag or font-style)
+  const isItalic = ['em', 'i'].includes(tag) || /font-style\s*:\s*italic/i.test(style);
+  if (isItalic) {
     const inner = processChildren(el, ctx).trim();
     return inner ? `*${inner}*` : '';
   }
@@ -344,11 +348,13 @@ function resolveUrl(url: string, baseUrl?: string): string {
 }
 
 function cleanMarkdownWhitespace(md: string): string {
-  return md
+  const cleaned = md
     .replace(/\r\n/g, '\n')
     // Remove 3+ consecutive newlines
     .replace(/\n{3,}/g, '\n\n')
     // Remove trailing spaces on lines
     .replace(/[ \t]+$/gm, '')
     .trim();
+
+  return normalizeCjkEmphasis(cleaned);
 }

@@ -250,8 +250,8 @@ export default function KnowledgeSourceModal({
       showToast(`已成功抓取: ${extracted.metadata.title}`, 'info');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('环境异常') || msg.includes('风控')) {
-        setExtractError('触发微信验证拦截。建议在浏览器打开文章后复制，切换至上方【粘贴内容】直接导入。');
+      if (msg.includes('知乎') || msg.includes('环境异常') || msg.includes('风控') || msg.includes('403') || msg.includes('拦截')) {
+        setExtractError(msg.replace(/^Error:\s*/, ''));
       } else {
         setExtractError(`解析失败: ${msg}`);
       }

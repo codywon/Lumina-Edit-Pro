@@ -5,7 +5,8 @@ import { XiaohongshuAdapter } from './adapters/xiaohongshu';
 import { localizeMarkdownAssets } from './assetLocalizer';
 import { parseHtmlToDocument } from './domHelper';
 import { buildFrontmatter } from './frontmatter';
-import { convertHtmlToMarkdown } from './htmlToMarkdown';
+import { convertHtmlToMarkdown, getEffectiveImgSrc, resolveUrl } from './htmlToMarkdown';
+import { extractArticleFromDocument } from './universalExtractor';
 import type {
   AssetLocalizationResult,
   ExtractedArticle,
@@ -19,6 +20,7 @@ export * from './types';
 export * from './assetLocalizer';
 export * from './htmlToMarkdown';
 export * from './frontmatter';
+export * from './universalExtractor';
 export { WechatAdapter, XiaohongshuAdapter, FeishuAdapter, GenericWebAdapter };
 
 const adapters: KnowledgeAdapter[] = [
@@ -89,6 +91,14 @@ export function extractArticleFromHtml(
 
   const doc = parseHtmlToDocument(cleanHtml);
   const platform = options.platform || (options.sourceUrl ? detectPlatform(options.sourceUrl) : 'generic');
+
+  if (platform === 'generic') {
+    const extracted = extractArticleFromDocument(doc, options.sourceUrl || '');
+    if (options.fallbackTitle && (!extracted.metadata.title || extracted.metadata.title === '网页知识剪藏')) {
+      extracted.metadata.title = options.fallbackTitle;
+    }
+    return extracted;
+  }
 
   const title =
     doc.querySelector('#activity-name')?.textContent?.trim() ||
@@ -188,7 +198,11 @@ export async function prepareClippedDocument(
 
   // Localize remote assets (images)
   if (localizeAssets) {
-    localizationResult = await localizeMarkdownAssets(bodyMarkdown, localizeOptions);
+    const localizeOpts: LocalizeAssetsOptions = {
+      referer: options.referer || article.metadata.sourceUrl,
+      ...localizeOptions,
+    };
+    localizationResult = await localizeMarkdownAssets(bodyMarkdown, localizeOpts);
     bodyMarkdown = localizationResult.markdown;
   }
 

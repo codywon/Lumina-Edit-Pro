@@ -10,6 +10,49 @@ export interface HtmlToMarkdownOptions {
   preserveImages?: boolean;
 }
 
+/**
+ * Checks whether an image src is an empty placeholder, 1x1 gif, or transparent spacer
+ */
+export function isPlaceholderImage(src?: string | null): boolean {
+  if (!src) return true;
+  const s = src.trim();
+  if (/^(?:javascript:|about:blank)/i.test(s)) return true;
+  if (/none\.(gif|png|jpe?g)|blank\.(gif|png)|pixel\.(gif|png)|spacer\.(gif|png)|transparent\.(gif|png)/i.test(s)) return true;
+  if (s.startsWith('data:image/svg+xml;base64,PHN2Zy')) return true;
+  if (s.includes('data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==')) return true;
+  if (/^data:image\/(?:gif|png|jpe?g);base64,[A-Za-z0-9+/=]{1,80}$/i.test(s)) return true;
+  return false;
+}
+
+/**
+ * Extracts the effective image URL from an img element, checking lazy-loading attributes
+ * (such as zoomfile, file, data-src, data-original) before falling back to src.
+ */
+export function getEffectiveImgSrc(el: Element): string {
+  const lazyAttrs = [
+    'zoomfile',
+    'file',
+    'data-original',
+    'data-src',
+    'data-original-src',
+    'data-actualsrc',
+    'data-url',
+    'data-lazy-src',
+    'data-echo',
+  ];
+  for (const attr of lazyAttrs) {
+    const val = el.getAttribute(attr);
+    if (val && !isPlaceholderImage(val)) {
+      return val.trim();
+    }
+  }
+  const src = el.getAttribute('src');
+  if (src && !isPlaceholderImage(src)) {
+    return src.trim();
+  }
+  return '';
+}
+
 export function convertHtmlToMarkdown(element: Element | Document, options: HtmlToMarkdownOptions = {}): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isDoc = element && (element as any).nodeType === 9;
@@ -47,9 +90,20 @@ function processNode(node: Node, ctx: Context): string {
     return '';
   }
 
-  // Check hidden elements
+  // Check hidden elements and anti-crawler watermarks / jammers
   const style = el.getAttribute('style') || '';
-  if (/display\s*:\s*none/i.test(style) || el.getAttribute('aria-hidden') === 'true') {
+  const className = el.getAttribute('class') || '';
+  if (
+    /display\s*:\s*none/i.test(style) ||
+    /visibility\s*:\s*hidden/i.test(style) ||
+    /font-size\s*:\s*0(?:px)?/i.test(style) ||
+    /color\s*:\s*transparent/i.test(style) ||
+    /opacity\s*:\s*0(?:\.0+)?(?:\s*;|$)/i.test(style) ||
+    el.getAttribute('aria-hidden') === 'true' ||
+    el.getAttribute('size') === '0' ||
+    className.includes('jammer') ||
+    className.includes('aimg_tip')
+  ) {
     return '';
   }
 
@@ -160,18 +214,8 @@ function processNode(node: Node, ctx: Context): string {
   if (tag === 'img') {
     if (ctx.preserveImages === false) return '';
 
-    // Support WeChat data-src, lazy-src, etc.
-    const src =
-      el.getAttribute('src') ||
-      el.getAttribute('data-src') ||
-      el.getAttribute('data-original-src') ||
-      el.getAttribute('data-actualsrc') ||
-      el.getAttribute('data-url');
-
-    if (!src || src.startsWith('data:image/svg+xml;base64,PHN2Zy') || src.includes('data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==')) {
-      // 1px transparent gif or placeholder
-      return '';
-    }
+    const src = getEffectiveImgSrc(el);
+    if (!src) return '';
 
     const alt = el.getAttribute('alt') || el.getAttribute('title') || '';
     return `\n\n![${alt}](${resolveUrl(src, ctx.baseUrl)})\n\n`;
@@ -198,7 +242,10 @@ function processNode(node: Node, ctx: Context): string {
 
   // Tables
   if (tag === 'table') {
-    return processTable(el);
+    if (isLayoutTable(el)) {
+      return processChildren(el, ctx);
+    }
+    return processTable(el, ctx);
   }
 
   // Task item or Todo block (div or li with data-block-type="todo" or class="task-item")
@@ -260,7 +307,34 @@ function processListItem(li: HTMLElement, ctx: Context): string {
   return subsequentLines ? `${firstLine}\n${subsequentLines}\n` : `${firstLine}\n`;
 }
 
-function processTable(table: Element): string {
+function isLayoutTable(table: Element): boolean {
+  const role = table.getAttribute('role');
+  if (role === 'presentation') return true;
+
+  const className = table.getAttribute('class') || '';
+  if (/layout|t_fsz/i.test(className)) return true;
+
+  const rows = Array.from(table.querySelectorAll('tr'));
+  if (rows.length === 0) return true;
+
+  const allCells = Array.from(table.querySelectorAll('th, td'));
+  if (allCells.length <= 1) return true;
+
+  // If any cell contains block-level elements that Markdown tables cannot represent
+  for (const cell of allCells) {
+    if (cell.classList.contains('t_f') || cell.getAttribute('id')?.startsWith('postmessage_')) {
+      return true;
+    }
+    const hasBlockElements = cell.querySelector('h1, h2, h3, h4, h5, h6, pre, blockquote, hr, table, ul, ol');
+    if (hasBlockElements) return true;
+    const pCount = cell.querySelectorAll('p').length;
+    if (pCount > 1) return true;
+  }
+
+  return false;
+}
+
+function processTable(table: Element, ctx: Context): string {
   const rows = Array.from(table.querySelectorAll('tr'));
   if (rows.length === 0) return '';
 
@@ -288,7 +362,7 @@ function processTable(table: Element): string {
       }
 
       // Convert inner cell contents to clean inline text
-      const cellText = cleanCellText(cell);
+      const cellText = cleanCellText(cell, ctx.baseUrl);
       rowData.push(cellText);
     });
 
@@ -328,16 +402,34 @@ function processTable(table: Element): string {
   return bodyMd ? `\n\n${headerMd}\n${separatorMd}\n${bodyMd}\n\n` : `\n\n${headerMd}\n${separatorMd}\n\n`;
 }
 
-function cleanCellText(cell: Element): string {
-  // Replace line breaks inside table cells with <br> to keep table structure intact
+function cleanCellText(cell: Element, baseUrl?: string): string {
+  // Replace line breaks inside table cells with space to keep table structure intact
   const clones = cell.cloneNode(true) as Element;
+  // Remove hidden and jammer elements
+  clones
+    .querySelectorAll(
+      '[style*="display:none"], [style*="display: none"], [style*="font-size:0"], .jammer, .aimg_tip, [aria-hidden="true"]'
+    )
+    .forEach((e) => e.remove());
   clones.querySelectorAll('br').forEach((b) => b.replaceWith(' '));
+  // Convert any inline images to markdown images if present
+  clones.querySelectorAll('img').forEach((img) => {
+    const src = getEffectiveImgSrc(img);
+    if (src) {
+      const alt = img.getAttribute('alt') || '';
+      const resolved = resolveUrl(src, baseUrl);
+      const textNode = clones.ownerDocument.createTextNode(` ![${alt}](${resolved}) `);
+      img.replaceWith(textNode);
+    } else {
+      img.remove();
+    }
+  });
   let text = clones.textContent || '';
   text = text.replace(/[\r\n\t]+/g, ' ').replace(/\|/g, '\\|').trim();
   return text || ' ';
 }
 
-function resolveUrl(url: string, baseUrl?: string): string {
+export function resolveUrl(url: string, baseUrl?: string): string {
   if (!baseUrl || !url) return url;
   if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
   try {

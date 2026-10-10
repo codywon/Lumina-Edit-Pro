@@ -2,17 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { parseFrontmatter } from '../frontmatter';
 import {
   buildFrontmatter,
+  cleanUniversalTitle,
   convertHtmlToMarkdown,
   detectPlatform,
   extractArticleFromUrl,
   extractImageUrls,
+  extractJsonLdMetadata,
   getExtensionFromContentType,
   getPlatformLabel,
   prepareClippedDocument,
+  scoreAndSelectArticleElement,
   WechatAdapter,
   XiaohongshuAdapter,
   FeishuAdapter,
   GenericWebAdapter,
+  getEffectiveImgSrc,
+  isPlaceholderImage,
 } from './index';
 
 describe('Knowledge Sources & Web Clipper', () => {
@@ -322,6 +327,274 @@ describe('Knowledge Sources & Web Clipper', () => {
       expect(res.frontmatter?.title).toBe('Hugging Face趋势榜第一');
       expect(res.frontmatter?.author).toBe('黑虾');
       expect(res.body.trim().startsWith('# Hugging Face趋势榜第一')).toBe(true);
+    });
+  });
+
+  describe('GenericWebAdapter - Forum and Discuz parsing', () => {
+    it('correctly extracts Discuz forum thread, ignores none.gif, resolves zoomfile images, and removes jammers', async () => {
+      const adapter = new GenericWebAdapter();
+      const mockDiscuzHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>STM32WLE5系列之1-芯片介绍和开发环境搭建 - STM32团队 ST意法半导体中文论坛</title>
+        </head>
+        <body>
+          <div class="main">
+            <div class="floor-bbs">
+              <div class="thread-div">
+                <h2>STM32WLE5系列之1-芯片介绍和开发环境搭建</h2>
+                <div class="thread-create-info">
+                  <a class="user-a" href="space-uid-123.html">
+                    <span>STMCU小助手</span>
+                  </a>
+                  <span class="thread-time">发布时间：2022-10-20 18:40</span>
+                </div>
+              </div>
+              <div class="t_fsz">
+                <table cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td class="t_f" id="postmessage_12345">
+                      <font face="Tahoma"><strong>简介</strong><br/>
+                      <span style="display:none">noise123</span>提示：这里可以添加本文要记录的大概内容：<br/>
+                      STM32WL系列是全球首款LoRa SOC芯片。<br/>
+                      <font class="jammer">jammer456</font><br/>
+                      </font>
+                      <ignore_js_op>
+                        <img alt="st-img" id="aimg_1" src="static/image/common/none.gif"
+                             zoomfile="data/attachment/forum/202210/20/img1.png"
+                             file="data/attachment/forum/202210/20/img1.png" class="zoom" />
+                        <div class="tip tip_4 aimg_tip" id="aimg_1_menu" style="display: none">
+                          <p><strong>ce248e.png</strong> <em>(162 KB, 下载次数: 47)</em></p>
+                          <p><a href="#">下载附件</a></p>
+                        </div>
+                      </ignore_js_op>
+                      <p>一、STM32WLE5资源介绍</p>
+                      <ignore_js_op>
+                        <img alt="st-img" id="aimg_2" src="static/image/common/none.gif"
+                             zoomfile="data/attachment/forum/202210/20/img2.png"
+                             file="data/attachment/forum/202210/20/img2.png" class="zoom" />
+                        <div class="tip tip_4 aimg_tip" id="aimg_2_menu" style="display: none">
+                          <p><strong>78a209.png</strong></p>
+                        </div>
+                      </ignore_js_op>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const result = await adapter.extract('https://shequ.stmicroelectronics.cn/thread-637348-1-1.html', mockDiscuzHtml);
+
+      expect(result.metadata.title).toBe('STM32WLE5系列之1-芯片介绍和开发环境搭建');
+      expect(result.metadata.author).toBe('STMCU小助手');
+      expect(result.metadata.publishDate).toBe('2022-10-20');
+      expect(result.metadata.platform).toBe('generic');
+
+      // Verify text extraction
+      expect(result.markdown).toContain('**简介**');
+      expect(result.markdown).toContain('提示：这里可以添加本文要记录的大概内容：');
+      expect(result.markdown).toContain('STM32WL系列是全球首款LoRa SOC芯片。');
+      expect(result.markdown).toContain('一、STM32WLE5资源介绍');
+
+      // Verify jammer and noise removal
+      expect(result.markdown).not.toContain('noise123');
+      expect(result.markdown).not.toContain('jammer456');
+      expect(result.markdown).not.toContain('下载次数');
+      expect(result.markdown).not.toContain('下载附件');
+      expect(result.markdown).not.toContain('none.gif');
+
+      // Verify images extraction with resolved URLs
+      expect(result.images).toEqual([
+        'https://shequ.stmicroelectronics.cn/data/attachment/forum/202210/20/img1.png',
+        'https://shequ.stmicroelectronics.cn/data/attachment/forum/202210/20/img2.png',
+      ]);
+      expect(result.markdown).toContain('![st-img](https://shequ.stmicroelectronics.cn/data/attachment/forum/202210/20/img1.png)');
+      expect(result.markdown).toContain('![st-img](https://shequ.stmicroelectronics.cn/data/attachment/forum/202210/20/img2.png)');
+
+      // Verify preparation pipeline creates the correct filename and frontmatter
+      const prepared = await prepareClippedDocument(result, {
+        localizeAssets: false,
+        includeFrontmatter: true,
+      });
+      expect(prepared.suggestedFileName).toBe('[通用网页] STM32WLE5系列之1-芯片介绍和开发环境搭建.md');
+      expect(prepared.fullMarkdown).toContain('title: "STM32WLE5系列之1-芯片介绍和开发环境搭建"');
+      expect(prepared.fullMarkdown).toContain('author: "STMCU小助手"');
+      expect(prepared.fullMarkdown).toContain('publish_date: "2022-10-20"');
+      expect(prepared.fullMarkdown).toContain('**简介**');
+    });
+
+    it('identifies placeholder images and extracts lazy attributes', () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { JSDOM } = require('jsdom');
+      const dom = new JSDOM(`
+        <img id="img1" src="static/image/common/none.gif" file="data/forum/real.png" />
+        <img id="img2" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-src="https://cdn.example.com/lazy.jpg" />
+        <img id="img3" src="https://cdn.example.com/direct.webp" />
+      `);
+
+      const img1 = dom.window.document.getElementById('img1');
+      const img2 = dom.window.document.getElementById('img2');
+      const img3 = dom.window.document.getElementById('img3');
+
+      expect(isPlaceholderImage('static/image/common/none.gif')).toBe(true);
+      expect(isPlaceholderImage('data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==')).toBe(true);
+      expect(isPlaceholderImage('https://cdn.example.com/direct.webp')).toBe(false);
+
+      expect(getEffectiveImgSrc(img1)).toBe('data/forum/real.png');
+      expect(getEffectiveImgSrc(img2)).toBe('https://cdn.example.com/lazy.jpg');
+      expect(getEffectiveImgSrc(img3)).toBe('https://cdn.example.com/direct.webp');
+    });
+
+    it('handles layout tables without flattening whole articles into a table row', () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { JSDOM } = require('jsdom');
+      const dom = new JSDOM(`
+        <table class="layout-wrapper">
+          <tr>
+            <td>
+              <h2>章节标题</h2>
+              <p>段落内容一</p>
+              <pre><code>console.log('code');</code></pre>
+              <p>段落内容二</p>
+            </td>
+          </tr>
+        </table>
+      `);
+
+      const md = convertHtmlToMarkdown(dom.window.document);
+      expect(md).toContain('## 章节标题');
+      expect(md).toContain('段落内容一');
+      expect(md).toContain('```');
+      expect(md).toContain('console.log(\'code\');');
+      expect(md).toContain('段落内容二');
+      // Should NOT be formatted as a single row table
+      expect(md).not.toMatch(/^\|\s*章节标题/);
+    });
+  });
+
+  describe('Universal Web Extraction Engine (Readability & Schema.org)', () => {
+    it('extracts metadata from Schema.org JSON-LD structured data', () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { JSDOM } = require('jsdom');
+      const dom = new JSDOM(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Page Title - Brand Name</title>
+          <script type="application/ld+json">
+          {
+            "@context": "https://schema.org",
+            "@type": "TechArticle",
+            "headline": "Rust 与 WebAssembly 现代高性能架构实战",
+            "author": {
+              "@type": "Person",
+              "name": "Ferris"
+            },
+            "datePublished": "2026-02-18T10:00:00Z",
+            "keywords": ["Rust", "Wasm", "Performance"],
+            "image": "https://example.com/cover.webp"
+          }
+          </script>
+        </head>
+        <body>
+          <article><p>正文内容测试</p></article>
+        </body>
+        </html>
+      `);
+
+      const meta = extractJsonLdMetadata(dom.window.document);
+      expect(meta.title).toBe('Rust 与 WebAssembly 现代高性能架构实战');
+      expect(meta.author).toBe('Ferris');
+      expect(meta.publishDate).toBe('2026-02-18');
+      expect(meta.tags).toEqual(['Rust', 'Wasm', 'Performance']);
+      expect(meta.coverUrl).toBe('https://example.com/cover.webp');
+    });
+
+    it('cleans site branding delimiters from titles', () => {
+      expect(cleanUniversalTitle('深入理解分布式系统 | 开源技术周刊')).toBe('深入理解分布式系统');
+      expect(cleanUniversalTitle('Linux 内核网络协议栈优化 - 极客架构师')).toBe('Linux 内核网络协议栈优化');
+      expect(cleanUniversalTitle('CSS Container Queries 指南 — Web 前端开发')).toBe('CSS Container Queries 指南');
+      expect(cleanUniversalTitle('人工智能新突破 » AI 前沿观察')).toBe('人工智能新突破');
+      expect(cleanUniversalTitle('单段标题没有任何分隔符')).toBe('单段标题没有任何分隔符');
+    });
+
+    it('isolates main article content and filters high link-density navigation and footers', async () => {
+      const adapter = new GenericWebAdapter();
+      const mockDocPageHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>微服务设计模式全解析 | 架构师笔记</title>
+          <meta name="author" content="Martin" />
+          <meta property="article:published_time" content="2026-01-15" />
+        </head>
+        <body>
+          <nav class="site-navigation">
+            <ul>
+              <li><a href="/home">首页</a></li>
+              <li><a href="/docs">文档中心</a></li>
+              <li><a href="/pricing">企业版定价</a></li>
+              <li><a href="/about">关于我们</a></li>
+              <li><a href="/blog">博客最新动态</a></li>
+            </ul>
+          </nav>
+
+          <aside class="sidebar-links">
+            <div class="widget">
+              <h3>推荐阅读</h3>
+              <ul>
+                <li><a href="/post1">推荐文章一链接</a></li>
+                <li><a href="/post2">推荐文章二链接</a></li>
+                <li><a href="/post3">推荐文章三链接</a></li>
+              </ul>
+            </div>
+          </aside>
+
+          <main class="page-content">
+            <div class="article-wrapper">
+              <h1>微服务设计模式全解析</h1>
+              <p>在分布式微服务架构中，服务边界划分与数据一致性是核心考量点。本文将详细探讨三种常用的模式：Saga 模式、CQRS 模式与事件驱动架构。</p>
+              <h2>1. Saga 模式与长事务处理</h2>
+              <p>传统分布式两阶段提交（2PC）往往带来极高的锁竞争与性能瓶颈。Saga 模式通过将大事务切分为一系列有序的局部事务，并在失败时依次触发补偿操作，从而实现最终一致性。</p>
+              <pre class="language-typescript"><code>interface SagaStep&lt;T&gt; {\n  execute: () =&gt; Promise&lt;T&gt;;\n  compensate: () =&gt; Promise&lt;void&gt;;\n}</code></pre>
+              <h2>2. CQRS 读写分离</h2>
+              <p>CQRS 将读操作与写操作完全分离为不同的数据模型，写端专注于业务完整性约束，读端针对查询场景极致调优。</p>
+            </div>
+          </main>
+
+          <footer class="site-footer">
+            <p>Copyright © 2026 架构师笔记. All rights reserved.</p>
+            <div class="footer-links">
+              <a href="/privacy">隐私政策</a>
+              <a href="/terms">用户协议</a>
+            </div>
+          </footer>
+        </body>
+        </html>
+      `;
+
+      const result = await adapter.extract('https://example.com/microservices-patterns', mockDocPageHtml);
+
+      expect(result.metadata.title).toBe('微服务设计模式全解析');
+      expect(result.metadata.author).toBe('Martin');
+      expect(result.metadata.publishDate).toBe('2026-01-15');
+
+      // Verify main content is preserved
+      expect(result.markdown).toContain('在分布式微服务架构中，服务边界划分与数据一致性是核心考量点。');
+      expect(result.markdown).toContain('Saga 模式与长事务处理');
+      expect(result.markdown).toContain('interface SagaStep<T>');
+      expect(result.markdown).toContain('CQRS 读写分离');
+
+      // Verify navigation, sidebar link farms, and footers are omitted
+      expect(result.markdown).not.toContain('企业版定价');
+      expect(result.markdown).not.toContain('推荐文章一链接');
+      expect(result.markdown).not.toContain('隐私政策');
+      expect(result.markdown).not.toContain('All rights reserved');
     });
   });
 });

@@ -139,6 +139,8 @@ export async function localizeMarkdownAssets(
             headers.Referer = 'https://mp.weixin.qq.com/';
           } else if (remoteUrl.includes('xiaohongshu.com') || remoteUrl.includes('xhscdn.com')) {
             headers.Referer = 'https://www.xiaohongshu.com/';
+          } else if (remoteUrl.includes('zhimg.com') || remoteUrl.includes('zhihu.com')) {
+            headers.Referer = 'https://www.zhihu.com/';
           }
 
           const downloadRes = await networkDownloadAsset({

@@ -152,4 +152,19 @@ tar -czf ~/backup.tar.gz .
     expect(decoded).toContain('~/config.json');
     expect(decoded).not.toContain('&#126;');
   });
+
+  it('renders CJK bold text as real Word bold runs instead of leaking ** markers', () => {
+    const md = `我方量身定制了基于微服务架构的**"端-网-云-用"四层高可用总体技术架构**。
+
+**13 个工具：**查环境
+
+甲**（备注）**乙
+`;
+
+    const bytes = generateDocxBytes(md, 'emphasis.docx');
+    const decoded = new TextDecoder().decode(bytes);
+
+    expect(decoded).toContain('<w:b/>');
+    expect(decoded).not.toContain('**');
+  });
 });

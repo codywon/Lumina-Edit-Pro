@@ -1427,7 +1427,10 @@ function AppContent() {
       const parsed = parseFrontmatter(content);
       const targetBody = parsed.frontmatter ? parsed.body : content;
       const normalizedTarget = normalizeCjkEmphasis(targetBody);
-      if (normalizedTarget !== currentMd && targetBody !== currentMd) {
+      // Repair documents whose raw `**` delimiters CommonMark refuses to render, even when the
+      // editor currently round-trips to the very same broken source (that is what kept them broken).
+      const needsEmphasisRepair = normalizedTarget !== targetBody;
+      if (needsEmphasisRepair || (normalizedTarget !== currentMd && targetBody !== currentMd)) {
         editor.commands.setContent(normalizedTarget);
       }
     }
@@ -1437,8 +1440,10 @@ function AppContent() {
   useEffect(() => {
     const saved = localStorage.getItem('lumina-content');
     if (saved) {
-      setContent(saved);
-      if (editor) editor.commands.setContent(saved);
+      // Restoring the draft used to feed the raw text straight into the editor, so YAML frontmatter
+      // leaked in and `**` delimiters CommonMark rejects stayed literal forever. Route it through the
+      // shared content-edit path, which isolates frontmatter and normalizes CJK emphasis.
+      applyDocumentContentEdit(saved);
     }
 
     const savedRecent = localStorage.getItem('lumina-recent-files');

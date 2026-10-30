@@ -7,7 +7,7 @@ import { createMarkedKatexExtension } from '../lib/markedKatex';
 import BrandIcon from './BrandIcon';
 
 marked.use(createMarkedKatexExtension());
-import { formatPanguSpacing } from '../lib/pangu';
+import { formatPanguSpacing, normalizeCjkEmphasis } from '../lib/pangu';
 import { extractDocumentBaseName, saveExportedBytes } from '../lib/exportSave';
 
 interface HeaderProps {
@@ -97,15 +97,22 @@ function HeaderComponent({
     const { from, to } = editor.state.selection;
     if (from !== to) {
       const selectedText = editor.state.doc.textBetween(from, to, '\n');
-      const formatted = formatPanguSpacing(selectedText);
+      const formatted = normalizeCjkEmphasis(formatPanguSpacing(selectedText));
       editor.chain().focus().insertContentAt({ from, to }, formatted).run();
       showToast('已完成选中内容的中英文排版规范化', 'info');
     } else {
       const currentMd = (editor.storage as any).markdown?.getMarkdown?.();
       if (typeof currentMd === 'string') {
-        const formatted = formatPanguSpacing(currentMd);
+        const spaced = formatPanguSpacing(currentMd);
+        const formatted = normalizeCjkEmphasis(spaced);
+        const repaired = formatted !== spaced;
         editor.commands.setContent(formatted);
-        showToast('已完成全文中英文排版规范化', 'info');
+        showToast(
+          repaired
+            ? '已完成全文中英文排版规范化，并修复了未渲染的 ** 加粗标记'
+            : '已完成全文中英文排版规范化',
+          'info'
+        );
       }
     }
   };
@@ -127,7 +134,7 @@ function HeaderComponent({
     const baseName = extractDocumentBaseName(content, 'Lumina-Document');
     
     if (format === 'html') {
-      const htmlBody = marked.parse(content);
+      const htmlBody = marked.parse(normalizeCjkEmphasis(content));
       const html = `<!doctype html>
 <html lang="zh-CN">
   <head>

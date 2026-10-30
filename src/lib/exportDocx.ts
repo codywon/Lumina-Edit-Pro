@@ -2,6 +2,7 @@ import { marked } from 'marked';
 import { extractDocumentBaseName, saveExportedBytes } from './exportSave';
 import { EXPORT_THEMES, ExportThemeConfig, ExportThemeId } from './exportThemes';
 import { parseFrontmatter } from './frontmatter';
+import { normalizeCjkEmphasis } from './pangu';
 
 /**
  * Pure TypeScript PKZIP Builder (Store method, 0 external dependencies)
@@ -192,7 +193,7 @@ export function generateDocxBytes(
   const docTitle = opts.title || extractDocumentBaseName(markdown, 'Lumina Document');
 
   const { frontmatter, body: contentWithoutFrontmatter } = parseFrontmatter(markdown);
-  const normalized = preprocessMarkdown(contentWithoutFrontmatter);
+  const normalized = preprocessMarkdown(normalizeCjkEmphasis(contentWithoutFrontmatter));
   const html = marked.parse(normalized, { async: false, gfm: true, breaks: true }) as string;
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');

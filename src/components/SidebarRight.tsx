@@ -10,6 +10,7 @@ import { summarizeContextWithModel } from '../lib/ai/contextCompression';
 import { createChatCompletion, createImageGeneration, normalizeError } from '../lib/ai/openaiClient';
 import { isValidApiKey, isValidBaseUrl } from '../lib/ai/validation';
 import type { AITemplate, AIMessage } from '../lib/ai/types';
+import { normalizeCjkEmphasis } from '../lib/pangu';
 import { cn } from '../lib/utils';
 
 interface SidebarRightProps {
@@ -958,7 +959,7 @@ function SidebarRightComponent({
                     urlTransform={markdownUrlTransform}
                     components={markdownComponents}
                   >
-                    {msg.content}
+                    {normalizeCjkEmphasis(msg.content)}
                   </ReactMarkdown>
                 </div>
               ) : (

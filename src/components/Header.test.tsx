@@ -190,6 +190,35 @@ describe('Header menu command model', () => {
     expect(screen.getByRole('button', { name: /新建文件/ })).toBeInTheDocument();
   });
 
+  it('keeps the clip source in the titlebar icon only and moves exports into a 导出 submenu', () => {
+    renderHeader();
+
+    const fileMenuButton = screen.getByRole('button', { name: '文件' });
+    fireEvent.pointerDown(fileMenuButton, { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(fileMenuButton);
+    fireEvent.click(fileMenuButton);
+
+    // 知识来源与网页剪藏 leaves the menu (the globe icon button stays as the single entry point).
+    expect(screen.queryByText(/^知识来源与网页剪藏/)).not.toBeInTheDocument();
+    expect(screen.getByTitle('知识来源与网页剪藏 (Ctrl+Shift+I)')).toBeInTheDocument();
+
+    // All export formats collapse into one second-level flyout.
+    expect(screen.queryByRole('button', { name: /导出为/ })).not.toBeInTheDocument();
+    const exportButton = screen.getByRole('button', { name: '导出' });
+    expect(exportButton).toHaveAttribute('aria-haspopup', 'menu');
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(exportButton.parentElement as HTMLElement);
+
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'PDF 文档',
+      'Word 文档',
+      'HTML 网页',
+      '长图 PNG',
+      'Markdown 文件',
+    ]);
+  });
+
   it('does not render a user avatar in the titlebar', () => {
     renderHeader();
 

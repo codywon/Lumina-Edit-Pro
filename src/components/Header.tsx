@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Sparkles, Globe, Search, ChevronUp, ChevronDown, Minus, Square, X } from 'lucide-react';
+import { Sparkles, Globe, Search, ChevronUp, ChevronDown, ChevronRight, Minus, Square, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSettings } from '../contexts/SettingsContext';
 import { marked } from 'marked';
@@ -9,6 +9,25 @@ import BrandIcon from './BrandIcon';
 marked.use(createMarkedKatexExtension());
 import { formatPanguSpacing, normalizeCjkEmphasis } from '../lib/pangu';
 import { extractDocumentBaseName, saveExportedBytes } from '../lib/exportSave';
+
+interface MenuLeaf {
+  label: string;
+  shortcut?: string;
+  action: () => void;
+}
+
+interface MenuItem {
+  label: string;
+  shortcut?: string;
+  action?: () => void;
+  /** Second-level flyout entries (e.g. 文件 → 导出 → 具体导出格式). */
+  children?: MenuLeaf[];
+}
+
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
 
 interface HeaderProps {
   viewMode: 'wysiwyg' | 'source' | 'split';
@@ -309,6 +328,7 @@ function HeaderComponent({
   };
 
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [searchActive, setSearchActive] = useState(false);
   const searchDebounceRef = useRef<number | null>(null);
@@ -338,12 +358,14 @@ function HeaderComponent({
     const handlePointerDown = (event: MouseEvent) => {
       if (menuBarRef.current && !menuBarRef.current.contains(event.target as Node)) {
         setActiveMenu(null);
+        setOpenSubmenu(null);
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setActiveMenu(null);
+        setOpenSubmenu(null);
       }
     };
 
@@ -355,32 +377,39 @@ function HeaderComponent({
     };
   }, [activeMenu]);
 
-  const menuGroups = [
+  const menuGroups: MenuGroup[] = [
     {
       label: '文件',
       items: [
         { label: '快速打开...', shortcut: 'Ctrl+P', action: () => onQuickOpen?.() },
-        { label: '知识来源与网页剪藏...', shortcut: 'Ctrl+Shift+I', action: () => onOpenKnowledgeSource?.() },
         { label: '新建文件', shortcut: settings.shortcuts.newFile, action: onNewFile },
         { label: '打开文件', shortcut: settings.shortcuts.openFile, action: onOpenFile },
         { label: '保存', shortcut: settings.shortcuts.saveFile, action: onSave },
         { label: '另存为...', shortcut: settings.shortcuts.saveAs || 'Ctrl+Shift+S', action: () => onSaveAs?.() },
         { label: '时光机...', action: () => onOpenTimeline?.() },
         { label: '打印', shortcut: '', action: () => window.print() },
-        { label: '导出为PDF', action: () => handleExport('pdf') },
-        { label: '导出为Word', action: () => {
-          if (onOpenExportDocx) {
-            onOpenExportDocx();
-          } else {
-            void (async () => {
-              const { exportMarkdownToDocx } = await import('../lib/exportDocx');
-              await exportMarkdownToDocx(content, undefined, showToast);
-            })();
-          }
-        } },
-        { label: '导出为HTML', action: () => handleExport('html') },
-        { label: '导出为长图', action: handleExportLongImage },
-        { label: '导出为Markdown', action: () => handleExport('md') },
+        {
+          label: '导出',
+          children: [
+            { label: 'PDF 文档', action: () => handleExport('pdf') },
+            {
+              label: 'Word 文档',
+              action: () => {
+                if (onOpenExportDocx) {
+                  onOpenExportDocx();
+                } else {
+                  void (async () => {
+                    const { exportMarkdownToDocx } = await import('../lib/exportDocx');
+                    await exportMarkdownToDocx(content, undefined, showToast);
+                  })();
+                }
+              },
+            },
+            { label: 'HTML 网页', action: () => handleExport('html') },
+            { label: '长图 PNG', action: handleExportLongImage },
+            { label: 'Markdown 文件', action: () => handleExport('md') },
+          ],
+        },
       ],
     },
     {
@@ -563,6 +592,7 @@ function HeaderComponent({
       return;
     }
 
+    setOpenSubmenu(null);
     setActiveMenu(activeMenu === groupLabel ? null : groupLabel);
   };
 
@@ -600,16 +630,80 @@ function HeaderComponent({
               </button>
               {activeMenu === group.label && (
                 <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg py-1 z-50">
-                  {group.items.map((item) => (
-                    <button
-                      key={item.label}
-                      onClick={() => { item.action(); setActiveMenu(null); }}
-                      className="w-full flex items-center justify-between px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
-                    >
-                      <span>{item.label}</span>
-                      {item.shortcut && <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-4">{item.shortcut}</span>}
-                    </button>
-                  ))}
+                  {group.items.map((item) =>
+                    item.children ? (
+                      <div
+                        key={item.label}
+                        className="relative"
+                        onMouseEnter={() => setOpenSubmenu(item.label)}
+                        onMouseLeave={() =>
+                          setOpenSubmenu((current) => (current === item.label ? null : current))
+                        }
+                      >
+                        <button
+                          type="button"
+                          aria-haspopup="menu"
+                          aria-expanded={openSubmenu === item.label}
+                          onClick={() =>
+                            setOpenSubmenu((current) => (current === item.label ? null : item.label))
+                          }
+                          className={cn(
+                            "w-full flex items-center justify-between px-4 py-2 text-xs transition-colors",
+                            openSubmenu === item.label
+                              ? "bg-slate-100 dark:bg-[#27272A] text-slate-900 dark:text-white"
+                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#27272A]"
+                          )}
+                        >
+                          <span>{item.label}</span>
+                          <ChevronRight size={12} className="ml-4 text-slate-400 dark:text-slate-500" />
+                        </button>
+                        {openSubmenu === item.label && (
+                          <div
+                            role="menu"
+                            className="absolute left-full top-0 ml-px w-56 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-[#27272A] rounded-md shadow-lg py-1 z-50"
+                          >
+                            {item.children.map((child) => (
+                              <button
+                                key={child.label}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  child.action();
+                                  setActiveMenu(null);
+                                  setOpenSubmenu(null);
+                                }}
+                                className="w-full flex items-center justify-between px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
+                              >
+                                <span>{child.label}</span>
+                                {child.shortcut && (
+                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-4">
+                                    {child.shortcut}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        key={item.label}
+                        onClick={() => {
+                          item.action?.();
+                          setActiveMenu(null);
+                          setOpenSubmenu(null);
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#27272A] transition-colors"
+                      >
+                        <span>{item.label}</span>
+                        {item.shortcut && (
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-4">
+                            {item.shortcut}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  )}
                 </div>
               )}
             </div>

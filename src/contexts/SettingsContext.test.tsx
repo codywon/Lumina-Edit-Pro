@@ -1,7 +1,7 @@
 import React from 'react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { SettingsProvider, useSettings } from './SettingsContext';
 
 function ensureMatchMedia() {
@@ -21,14 +21,22 @@ function ensureMatchMedia() {
 }
 
 function SettingsProbe() {
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
 
-  return <pre data-testid="settings-json">{JSON.stringify(settings)}</pre>;
+  return (
+    <div>
+      <pre data-testid="settings-json">{JSON.stringify(settings)}</pre>
+      <button type="button" onClick={() => updateSettings({ fontSize: 13 })}>
+        Set Font 13
+      </button>
+    </div>
+  );
 }
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  document.documentElement.style.removeProperty('--editor-font-size');
   vi.clearAllMocks();
 });
 
@@ -45,5 +53,19 @@ describe('SettingsContext defaults', () => {
     );
 
     expect(screen.getByTestId('settings-json').textContent).not.toContain('showLineNumbers');
+  });
+
+  it('updates --editor-font-size on documentElement when fontSize changes', () => {
+    render(
+      <SettingsProvider>
+        <SettingsProbe />
+      </SettingsProvider>
+    );
+
+    expect(document.documentElement.style.getPropertyValue('--editor-font-size')).toBe('16px');
+
+    fireEvent.click(screen.getByText('Set Font 13'));
+
+    expect(document.documentElement.style.getPropertyValue('--editor-font-size')).toBe('13px');
   });
 });

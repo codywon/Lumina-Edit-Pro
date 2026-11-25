@@ -217,6 +217,23 @@ describe('Editor rendering modes', () => {
     expect(screen.getByTestId('editor-content')).not.toHaveClass('mx-auto');
     expect(screen.getByTestId('editor-content')).toHaveClass('w-full');
   });
+
+  it('syncs --editor-font-size inline CSS variable on the editor viewport', () => {
+    const { container, unmount } = renderEditor('wysiwyg');
+    const defaultViewport = container.querySelector('[data-testid="editor-main-viewport"]') as HTMLDivElement;
+
+    expect(defaultViewport.style.getPropertyValue('--editor-font-size')).toBe('16px');
+    expect(defaultViewport.style.fontSize).toBe('16px');
+
+    unmount();
+    localStorage.setItem('app-settings', JSON.stringify({ fontSize: 13 }));
+
+    const { container: customContainer } = renderEditor('wysiwyg');
+    const customViewport = customContainer.querySelector('[data-testid="editor-main-viewport"]') as HTMLDivElement;
+
+    expect(customViewport.style.getPropertyValue('--editor-font-size')).toBe('13px');
+    expect(customViewport.style.fontSize).toBe('13px');
+  });
 });
 
 describe('Editor split scroll sync', () => {

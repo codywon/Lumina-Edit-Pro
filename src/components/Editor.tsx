@@ -1500,6 +1500,7 @@ function EditorComponent({ content, setContent, viewMode, setViewMode, isToolbar
           "printable-content flex-1 relative overflow-y-auto custom-scrollbar p-8 md:px-16 lg:px-24"
         )}
         style={{
+          '--editor-font-size': `${settings.fontSize}px`,
           '--editor-line-height': `${lineHeight}`, 
           '--editor-paragraph-spacing': `${paragraphSpacing}em`,
           '--table-row-padding': `${tablePadding}rem`,
